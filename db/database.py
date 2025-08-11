@@ -6,14 +6,13 @@ from typing import Any, Dict, List, Sequence, Tuple
 root_path = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_path))
 
-from sqlalchemy import Engine, Result, Row, create_engine, delete, text, update, select, func, and_, or_
+from sqlalchemy import delete, exists, select, and_, or_
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload, load_only, joinedload
+from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import settings
 from models.models import Auditory, Gender, User, Training, TrainingType, Discipline, Subscription, AvailableTraining
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from schemas.schemas import *
 
 async_engine = create_async_engine(
@@ -130,13 +129,13 @@ class ORMBase():
     async def user_exists(name: str, email: str) -> bool:
         async with async_session_factory() as session:
             query = select(
-                User
-            ).where(
-                (User.name == name) | (User.email == email)
+                exists().where(
+                    (User.name == name) | (User.email == email)
+                )
             )
 
             result = await session.execute(query)
-            return result.scalar_one_or_none() is not None
+            return result.scalar()
         
     @staticmethod
     async def get_training_by_id(id: int, session: AsyncSession | None = None) -> TrainingDTO | None:
@@ -233,33 +232,40 @@ class ORMBase():
             return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
 
     @staticmethod
-    async def training_exists(**kwargs) -> bool:
-        async with async_session_factory() as session:
-            filters = []
+    async def training_exists(session: AsyncSession | None = None, **kwargs) -> bool:
+        filters = []
 
-            filter_map = {
-                'title': Training.title,
-                'time_start': Training.time_start,
-                'time_end': Training.time_end,
-                'type': Training.type,
-                'discipline': Training.discipline,
-                'coach_id': User.id
-            }
+        filter_map = {
+            'title': Training.title,
+            'time_start': Training.time_start,
+            'time_end': Training.time_end,
+            'type': Training.type,
+            'discipline': Training.discipline,
+            'coach_id': User.id
+        }
 
-            for key, value in kwargs.items():
-                column = filter_map.get(key)
-                if column is not None and value is not None:
-                    filters.append(column == value)
-            query = select(
-                Training
-            ).join(User, User.id == Training.coach_id).where(
+        for key, value in kwargs.items():
+            column = filter_map.get(key)
+            if column is not None and value is not None:
+                filters.append(column == value)
+        query = select(
+            exists().where(
                 and_(
                     *filters
                 )
             )
+        ).select_from(Training).join(User, User.id == Training.coach_id)
 
+        if session is None:
+            async with async_session_factory() as session:
+                
+
+                result = await session.execute(query)
+                return result.scalar()
+            
+        else:
             result = await session.execute(query)
-            return len(result.scalars().all()) > 0
+            return result.scalar()
 
     @staticmethod 
     async def register_new_user(user: UserAddDTO, session: AsyncSession | None = None) -> None:
@@ -291,48 +297,72 @@ class ClientService():
             result = await session.execute(query)
             return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalar_one_or_none().subs]
         
-    async def show_available_trainings(self) -> List[TrainingDTO]:
-        async with async_session_factory() as session:
-            query = select(
-                User
-            ).options(
-                selectinload(User.avilable)
-            ).where(
-                User.id == self.user.id
-            )
+    async def show_available_trainings(self, session: AsyncSession | None = None, **kwargs) -> List[TrainingDTO]:
+        """Show available trainigs for the user by filtering with kwargs."""
+        filters = []
 
-            result = await session.execute(query)
-            return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalar_one_or_none().avilable]
+        filter_map = {
+            'title': Training.title,
+            'description': Training.description,
+            'time_start': Training.time_start,
+            'time_end': Training.time_end,
+            'type': Training.type,
+            'discipline': Training.discipline,
+            'coach_id': User.id,
+            "individual_for_id": Training.individual_for_id,
+            "target_auditory": Training.target_auditory,
+            "target_gender": Training.target_gender
+        }
+
+        for key, value in kwargs.items():
+            column = filter_map[key]
+            if column is not None and value is not None:
+                filters.append(column == value)
+
+        query = select(
+                Training
+            ).join(
+                User.avilable
+            ).where(
+                User.id == self.user.id, *filters
+            )
         
+        if session is None:
+            async with async_session_factory() as session:
+                result = await session.execute(query)
+                return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
+            
+        else:
+            result = await session.execute(query)
+            return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
+        
+
     async def subscribe_to_training(self, training_id: int) -> SubscriptionDTO:
         async with async_session_factory() as session:
             try:
-                training = await ORMBase.get_training_by_id(training_id, session)
-                if not training:
-                    raise ValueError("Training not found")
 
-                if not await self.is_available_training_exist(self.user.id, training.id, session):
+                if not await self.available_training_exists(training_id, session):
                     raise ValueError("You are not available for this training")
                 
                 subscription_data = SubscriptionDTO(
                     user_id=self.user.id,
-                    training_id=training.id
+                    training_id=training_id
                 )
 
                 insert_stmt = pg_insert(
                     Subscription
                 ).values(
-                    user_id=subscription_data.user_id,
+                    student_id=subscription_data.user_id,
                     training_id=subscription_data.training_id
                 ).on_conflict_do_nothing(
-                    index_elements=['user_id', 'training_id']
+                    index_elements=['student_id', 'training_id']
                 )
 
                 delete_stmt = delete(
                     AvailableTraining
                 ).where(
                     AvailableTraining.user_id == self.user.id,
-                    AvailableTraining.training_id == training.id
+                    AvailableTraining.training_id == training_id
                 )
 
                 # delete the training from available trainings
@@ -351,21 +381,21 @@ class ClientService():
                 await session.rollback()
                 raise ex
 
-    async def is_available_training_exist(self, training_id: int, session: AsyncSession | None = None) -> bool:
+    async def available_training_exists(self, training_id: int, session: AsyncSession | None = None) -> bool:
         """Check if a user is available for a specific training."""
         query = select(
-                AvailableTraining
-        ).where(
+            exists().where(
                 AvailableTraining.user_id == self.user.id,
                 AvailableTraining.training_id == training_id
-            )   
+            )
+        )   
         if session is None:
             async with async_session_factory() as session:
                 result = await session.execute(query)
-                return result.scalar_one_or_none() is not None
+                return result.scalar()
         else:
             result = await session.execute(query)
-            return await result.scalar_one_or_none() is not None
+            return result.scalar()
 
 
     def get_user(self) -> UserDTO:

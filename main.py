@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, List
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
@@ -192,7 +192,7 @@ async def read_own_available_trainings(
 
 @app.post("/users/me/client/subscribe/", response_model=TrainingDTO)
 async def subscribe_to_trainig(
-    training_data: TrainigSearchDTO,
+    title: Annotated[str | None, Query(description="Title of the training")],
     current_user: Annotated[UserDTO, Depends(get_current_client)]
     ):
     #TODO

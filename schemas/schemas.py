@@ -71,18 +71,6 @@ class TrainingAddDTO(BaseModel):
     
         return values
 
-class TrainigSearchDTO(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    time_start: Optional[datetime] = None
-    time_end: Optional[datetime] = None
-    type: Optional[TrainingType] = None
-    discipline: Optional[Discipline] = None
-    coach_id: Optional[int] = None
-    individual_for_id: Optional[int] = None
-    target_auditory: Optional[Auditory] = None  # e.g., "adults", "children"
-    target_gender: Optional[Gender] = None
-
 class TrainingDTO(TrainingAddDTO):
     id: int
 
