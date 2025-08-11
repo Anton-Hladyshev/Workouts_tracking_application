@@ -129,7 +129,8 @@ def get_curent_coach(user: UserDTO = Depends(get_current_user)) -> UserDTO:
     if user.role != Role.COACH:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. You are not a coach."
+            detail="Not enough permissions. You are not a coach.",
+            headers={"WWW-Authenticate": "Bearer"}
         )
     
     return user
@@ -138,7 +139,8 @@ def get_current_client(user: UserDTO = Depends(get_current_user)) -> UserDTO:
     if user.role != Role.STUDENT:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. You are not a student."
+            detail="Not enough permissions. You are not a coach.",
+            headers={"WWW-Authenticate": "Bearer"}
         )
     
     return user
@@ -155,6 +157,22 @@ async def read_current_coach(
 ) -> UserDTO:
     service = CoachService(current_user)
     return service.get_user()
+
+@app.delete("/users/me/coach/training/delete", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_training(
+    training_id: int,
+    current_user: Annotated[UserDTO, Depends(get_curent_coach)]) -> None:
+    try:
+        service = CoachService(current_user)
+        await service.delete_training(
+            training_id=training_id
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions. You are not a coach.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
 @app.get("/users/me/client", response_model=UserDTO)
 async def read_current_client(
