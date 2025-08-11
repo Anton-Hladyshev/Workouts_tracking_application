@@ -8,7 +8,7 @@ from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from models.enums import Role
-from schemas.schemas import TrainingDTO, TrainigSearchDTO, UserDTO
+from schemas.schemas import SubscriptionDTO, TrainingDTO, UserDTO
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
 from dotenv import load_dotenv
@@ -190,13 +190,24 @@ async def read_own_available_trainings(
         )
     return available_trainings
 
-@app.post("/users/me/client/subscribe/", response_model=TrainingDTO)
+@app.post("/users/me/client/subscribe/", response_model=SubscriptionDTO)
 async def subscribe_to_trainig(
-    title: Annotated[str | None, Query(description="Title of the training")],
+    training_id: int,
     current_user: Annotated[UserDTO, Depends(get_current_client)]
     ):
-    #TODO
-    pass
+    service = ClientService(current_user)
+    try:
+        new_subscription = await service.subscribe_to_training(
+            training_id=training_id
+        )
+
+        return new_subscription
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No available trainings with this ID",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
     
 
 #@app.get("/users/me/items/")
