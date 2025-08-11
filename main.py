@@ -34,6 +34,7 @@ class TokenData(BaseModel):
 
 
 def verify_password(hashed_password: str, plain_password: str) -> bool:
+    """Verify if the provided password matches the hashed password."""
     is_correct = True
     try:
         ph.verify(hashed_password, plain_password)
@@ -42,9 +43,11 @@ def verify_password(hashed_password: str, plain_password: str) -> bool:
     return is_correct
 
 def get_password_hash(password: str) -> str:
+    """Hash the provided password using Argon2."""
     return ph.hash(password)
 
 async def get_user(username: str) -> UserDTO | None:
+    """Retrieve a user by username from the database."""
     async with async_session_factory() as session:
         params = {
             "name": username
@@ -54,6 +57,7 @@ async def get_user(username: str) -> UserDTO | None:
         return user
     
 async def authenticate_user(username: str, password: str) -> UserDTO | bool:
+    """Authenticate a user by verifying the username and password."""
     user = await get_user(username)
     if not user:
         return False
@@ -64,6 +68,7 @@ async def authenticate_user(username: str, password: str) -> UserDTO | bool:
 def create_access_token(
     data: dict, expires_delta: timedelta | None = None
                         ) -> str:
+    """Create a JWT access token with an expiration time."""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -77,6 +82,7 @@ def create_access_token(
 async def get_current_user(
         token: Annotated[str, Depends(oauth2_scheme)]
 ) -> UserDTO:
+    """Get the current user from the JWT token."""
     creditials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -171,6 +177,19 @@ async def read_own_subscriptions(
         )
     return subs
 
+@app.get("/users/me/client/available_trainings/", response_model=List[TrainingDTO])
+async def read_own_available_trainings(
+    current_user: Annotated[UserDTO, Depends(get_current_client)]
+) -> List[TrainingDTO]:
+    service = ClientService(current_user)
+    available_trainings = await service.show_available_trainings()
+    if len(available_trainings) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You have no available trainings",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    return available_trainings
     
 
 #@app.get("/users/me/items/")
