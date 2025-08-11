@@ -8,7 +8,7 @@ from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from models.enums import Role
-from schemas.schemas import TrainingDTO, UserDTO, UserRelWithSubscriptionsDTO
+from schemas.schemas import TrainingDTO, TrainigSearchDTO, UserDTO
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
 from dotenv import load_dotenv
@@ -179,8 +179,7 @@ async def read_own_subscriptions(
 
 @app.get("/users/me/client/available_trainings/", response_model=List[TrainingDTO])
 async def read_own_available_trainings(
-    current_user: Annotated[UserDTO, Depends(get_current_client)]
-) -> List[TrainingDTO]:
+    current_user: Annotated[UserDTO, Depends(get_current_client)] ) -> List[TrainingDTO]:
     service = ClientService(current_user)
     available_trainings = await service.show_available_trainings()
     if len(available_trainings) == 0:
@@ -190,6 +189,14 @@ async def read_own_available_trainings(
             headers={"WWW-Authenticate": "Bearer"}
         )
     return available_trainings
+
+@app.post("/users/me/client/subscribe/", response_model=TrainingDTO)
+async def subscribe_to_trainig(
+    training_data: TrainigSearchDTO,
+    current_user: Annotated[UserDTO, Depends(get_current_client)]
+    ):
+    #TODO
+    pass
     
 
 #@app.get("/users/me/items/")

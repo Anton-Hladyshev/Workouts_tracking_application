@@ -198,6 +198,41 @@ class ORMBase():
             return None
 
     @staticmethod
+    async def get_training_by(session: AsyncSession | None = None, **kwargs) -> List[TrainingDTO | None]:
+        filters = []
+
+        filter_map = {
+            'title': Training.title,
+            'time_start': Training.time_start, 
+            'time_end': Training.time_end,
+            'type': Training.type,
+            'discipline': Training.discipline,
+            'coach_id': User.id
+        }
+
+        for key, value in kwargs.items():
+            column = filter_map.get(key)
+            if column is not None and value is not None:
+                filters.append(column == value) 
+
+        query = select(
+            Training
+        ).where(
+            and_(
+                *filters
+            )
+        )
+        
+        if session is None:
+            async with async_session_factory() as session:
+                result = await session.execute(query)
+                return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
+            
+        else:
+            result = await session.execute(query)
+            return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
+
+    @staticmethod
     async def training_exists(**kwargs) -> bool:
         async with async_session_factory() as session:
             filters = []
@@ -272,21 +307,42 @@ class ClientService():
     async def subscribe_to_training(self, training_id: int) -> SubscriptionDTO:
         async with async_session_factory() as session:
             try:
-                training = await ORMBase.get_training_by_id(training_id)
+                training = await ORMBase.get_training_by_id(training_id, session)
                 if not training:
                     raise ValueError("Training not found")
+
+                if not await self.is_available_training_exist(self.user.id, training.id, session):
+                    raise ValueError("You are not available for this training")
                 
                 subscription_data = SubscriptionDTO(
                     user_id=self.user.id,
                     training_id=training.id
                 )
 
-                subscription = Subscription(
-                    student_id=subscription_data.user_id,
+                insert_stmt = pg_insert(
+                    Subscription
+                ).values(
+                    user_id=subscription_data.user_id,
                     training_id=subscription_data.training_id
+                ).on_conflict_do_nothing(
+                    index_elements=['user_id', 'training_id']
                 )
 
-                session.add(subscription)
+                delete_stmt = delete(
+                    AvailableTraining
+                ).where(
+                    AvailableTraining.user_id == self.user.id,
+                    AvailableTraining.training_id == training.id
+                )
+
+                # delete the training from available trainings
+                await session.execute(
+                    insert_stmt
+                )
+                await session.execute(
+                    delete_stmt
+                )
+
                 await session.commit()
 
                 return subscription_data
@@ -294,6 +350,23 @@ class ClientService():
             except Exception as ex:
                 await session.rollback()
                 raise ex
+
+    async def is_available_training_exist(self, training_id: int, session: AsyncSession | None = None) -> bool:
+        """Check if a user is available for a specific training."""
+        query = select(
+                AvailableTraining
+        ).where(
+                AvailableTraining.user_id == self.user.id,
+                AvailableTraining.training_id == training_id
+            )   
+        if session is None:
+            async with async_session_factory() as session:
+                result = await session.execute(query)
+                return result.scalar_one_or_none() is not None
+        else:
+            result = await session.execute(query)
+            return await result.scalar_one_or_none() is not None
+
 
     def get_user(self) -> UserDTO:
         return self.user
