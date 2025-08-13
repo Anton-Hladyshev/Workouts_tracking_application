@@ -9,6 +9,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from models.enums import Role
 from schemas.schemas import SubscriptionDTO, TrainingDTO, UserDTO
+from schemas.exceptions import ForbiddenActionError
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
 from dotenv import load_dotenv
@@ -169,8 +170,14 @@ async def delete_training(
         )
     except ValueError:
         raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="There is not any training with this ID.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    except ForbiddenActionError as e:
+        raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. You are not a coach.",
+            detail=e.message,
             headers={"WWW-Authenticate": "Bearer"}
         )
 

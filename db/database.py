@@ -14,6 +14,7 @@ from app.config import settings
 from models.models import Auditory, Gender, User, Training, TrainingType, Discipline, Subscription, AvailableTraining
 from datetime import datetime
 from schemas.schemas import *
+from schemas.exceptions import ForbiddenActionError
 
 async_engine = create_async_engine(
     url=settings.get_db_url_with_asyncpg, 
@@ -541,6 +542,8 @@ class CoachService():
             training = await ORMBase.get_training_by_id(training_id)
             if not training:
                 raise ValueError("Training not found")
+            if training.coach_id != self.user.id:
+                raise ForbiddenActionError("You do not have permission to delete this training.")
 
             await session.execute(
                 delete(Training).where(Training.id == training_id)
