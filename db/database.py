@@ -440,6 +440,25 @@ class CoachService():
 
 
     async def create_training(self, **data: Dict) -> TrainingAddDTO:
+        """
+        Creates a new training session and stores it in the database.
+        Parameters:
+            **data (Dict): A dictionary containing the following keys:
+                - title (str): The title of the training session.
+                - description (str, optional): A description of the training session. Defaults to an empty string.
+                - date (str): The date of the training session in the format 'YYYY-MM-DD'.
+                - time_start (str): The start time of the training session in the format 'HH:MM:SS'.
+                - time_end (str): The end time of the training session in the format 'HH:MM:SS'.
+                - type (str): The type of training.
+                - discipline (str): The discipline of the training.
+                - individual_for_id (int, optional): The ID of the individual for whom the training is intended. Defaults to None.
+                - target_auditory (str, optional): The target auditory for the training. Defaults to None.
+                - target_gender (str, optional): The target gender for the training. Defaults to None.
+        Returns:
+            TrainingAddDTO: An object containing the details of the created training session.
+        Raises:
+            Exception: If there is an error during the creation of the training session.
+        """
         async with async_session_factory() as session:
             try:
                 date_time_start = datetime.strptime(f"{data["date"]} {data["time_start"]}", "%Y-%m-%d %H:%M:%S")

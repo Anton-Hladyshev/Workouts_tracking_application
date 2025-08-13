@@ -63,11 +63,11 @@ class TrainingAddDTO(BaseModel):
             target_gender = values.target_gender
 
         if type_ == TrainingType.INDIVIDUAL and not individual_for_id:
-            raise ValueError("Individual training must have an individual_for_id")
+            raise ValueError("Individual training must have an id of a specific student")
         if type_ == TrainingType.INDIVIDUAL and (target_auditory or target_gender):
-            raise ValueError("An individual traoining can not have a target audiatory or target gender. It is for a specific user specified by individual_for_id")
+            raise ValueError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
         if type_ == TrainingType.GROUP and individual_for_id:
-            raise ValueError("Group training cannot have an individual_for_id")
+            raise ValueError("Group training cannot have an id of a specific student")
     
         return values
 
