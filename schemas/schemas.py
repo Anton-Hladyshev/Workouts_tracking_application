@@ -35,18 +35,18 @@ class UserAddDTO(BaseModel):
 class UserDTO(UserAddDTO):
     id: int
 
-class TrainingAddDTO(BaseModel):
+class TrainigOnInputDTO(BaseModel):
     title: str
     description: Optional[str] = None
-    time_start: datetime
-    time_end: datetime
+    date: str
+    time_start: str
+    time_end: str
     type: TrainingType
     discipline: Discipline
     coach_id: int
     individual_for_id: Optional[int] = None
     target_auditory: Optional[Auditory] = None  # e.g., "adults", "children"
     target_gender: Optional[Gender] = None
-
 
     @model_validator(mode="before")
     def validate_training_model(cls, values) -> dict:
@@ -70,6 +70,19 @@ class TrainingAddDTO(BaseModel):
             raise ValueError("Group training cannot have an id of a specific student")
     
         return values
+
+class TrainingAddDTO(BaseModel):
+    title: str
+    description: Optional[str] = None
+    time_start: datetime
+    time_end: datetime
+    type: TrainingType
+    discipline: Discipline
+    coach_id: int
+    individual_for_id: Optional[int] = None
+    target_auditory: Optional[Auditory] = None  # e.g., "adults", "children"
+    target_gender: Optional[Gender] = None
+
 
 class TrainingDTO(TrainingAddDTO):
     id: int

@@ -2,13 +2,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, List
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status, Query
+from fastapi import Body, Depends, FastAPI, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from models.enums import Role
-from schemas.schemas import SubscriptionDTO, TrainingDTO, UserDTO
+from schemas.schemas import SubscriptionDTO, TrainingAddDTO, TrainingDTO, UserDTO
 from schemas.exceptions import ForbiddenActionError
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
@@ -158,6 +158,14 @@ async def read_current_coach(
 ) -> UserDTO:
     service = CoachService(current_user)
     return service.get_user()
+
+@app.post("/users/me/coach/training/create", status_code=status.HTTP_201_CREATED)
+async def create_training(
+    current_user: Annotated[UserDTO, Depends(get_curent_coach)],
+    training_data: TrainingAddDTO = Body(...)
+    ):
+    service = CoachService(current_user)
+    service.create_training
 
 @app.delete("/users/me/coach/training/delete", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_training(

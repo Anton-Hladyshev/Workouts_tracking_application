@@ -460,51 +460,47 @@ class CoachService():
             Exception: If there is an error during the creation of the training session.
         """
         async with async_session_factory() as session:
-            try:
-                date_time_start = datetime.strptime(f"{data["date"]} {data["time_start"]}", "%Y-%m-%d %H:%M:%S")
-                date_time_end = datetime.strptime(f"{data["date"]} {data["time_end"]}", "%Y-%m-%d %H:%M:%S")
+            date_time_start = datetime.strptime(f"{data["date"]} {data["time_start"]}", "%Y-%m-%d %H:%M:%S")
+            date_time_end = datetime.strptime(f"{data["date"]} {data["time_end"]}", "%Y-%m-%d %H:%M:%S")
 
-                training_data = TrainingAddDTO(
-                    title=data["title"],
-                    description=data.get("description", ""),
-                    time_start=date_time_start,
-                    time_end=date_time_end,
-                    type=TrainingType(data["type"]),
-                    discipline=Discipline(data["discipline"]),
-                    coach_id=self.user.id,
-                    individual_for_id=data.get("individual_for_id", None),
-                    target_auditory=Auditory(data.get("target_auditory")) if data.get("target_auditory") else None,
-                    target_gender=Gender(data.get("target_gender")) if data.get("target_gender") else None
-                )
+            training_data = TrainingAddDTO(
+                title=data["title"],
+                description=data.get("description", ""),
+                time_start=date_time_start,
+                time_end=date_time_end,
+                type=TrainingType(data["type"]),
+                discipline=Discipline(data["discipline"]),
+                coach_id=self.user.id,
+                individual_for_id=data.get("individual_for_id", None),
+                target_auditory=Auditory(data.get("target_auditory")) if data.get("target_auditory") else None,
+                target_gender=Gender(data.get("target_gender")) if data.get("target_gender") else None
+            )
 
-                training = Training(
-                    title=training_data.title,
-                    description=training_data.description,
-                    time_start=training_data.time_start,
-                    time_end=training_data.time_end,
-                    type=training_data.type,
-                    discipline=training_data.discipline,
-                    coach_id=training_data.coach_id,
-                    individual_for_id=training_data.individual_for_id,
-                    target_auditory=training_data.target_auditory,
-                    target_gender=training_data.target_gender
-                )
+            training = Training(
+                title=training_data.title,
+                description=training_data.description,
+                time_start=training_data.time_start,
+                time_end=training_data.time_end,
+                type=training_data.type,
+                discipline=training_data.discipline,
+                coach_id=training_data.coach_id,
+                individual_for_id=training_data.individual_for_id,
+                target_auditory=training_data.target_auditory,
+                target_gender=training_data.target_gender
+            )
 
-                session.add(training)
-                await session.flush()
+            session.add(training)
+            await session.flush()
 
-                target_users_data = await self.calculate_target_users(session, training)
+            target_users_data = await self.calculate_target_users(session, training)
                     
-                if target_users_data:
-                    stmt = pg_insert(AvailableTraining).values(target_users_data).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
-                    await session.execute(stmt)
-                    await session.commit()
+            if target_users_data:
+                stmt = pg_insert(AvailableTraining).values(target_users_data).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
+                await session.execute(stmt)
+                await session.commit()
 
-                    return training_data
+                return training_data
 
-            except Exception as ex:
-                await session.rollback()
-                raise ex
             
             
     async def update_training(self, training_id: int, **kwargs: Dict[str, Any]) -> None:
