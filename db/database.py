@@ -538,19 +538,14 @@ class CoachService():
                 
     async def delete_training(self, training_id: int) -> None:
         async with async_session_factory() as session:
-            try:
-                training = await ORMBase.get_training_by_id(training_id)
-                if not training:
-                    raise ValueError("Training not found")
+            training = await ORMBase.get_training_by_id(training_id)
+            if not training:
+                raise ValueError("Training not found")
 
-                await session.execute(
-                    delete(Training).where(Training.id == training_id)
-                )
-                await session.commit()
-
-            except Exception as ex:
-                await session.rollback()
-                raise ex
+            await session.execute(
+                delete(Training).where(Training.id == training_id)
+            )
+            await session.commit()
 
     def get_user(self) -> UserDTO:
         return self.user
