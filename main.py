@@ -7,8 +7,8 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from models.enums import Role
-from schemas.schemas import SubscriptionDTO, TrainingAddDTO, TrainingDTO, UserDTO
+from models.enums import Discipline, Role, TrainingType
+from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, UserDTO
 from schemas.exceptions import ForbiddenActionError
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
@@ -162,10 +162,34 @@ async def read_current_coach(
 @app.post("/users/me/coach/training/create", status_code=status.HTTP_201_CREATED)
 async def create_training(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)],
-    training_data: TrainingAddDTO = Body(...)
+    training_data: TrainingOnInputDTO = Body()
     ):
     service = CoachService(current_user)
-    service.create_training
+    training_dict = training_data.model_dump()
+    date_time_start = datetime.strptime(f"{training_dict["date"]} {training_dict["time_start"]}", "%Y-%m-%d %H:%M:%S")
+    date_time_end = datetime.strptime(f"{training_dict["date"]} {training_dict["time_end"]}", "%Y-%m-%d %H:%M:%S")
+
+    training_dto = TrainingAddDTO(
+        title=training_dict.get("title"),
+        description=training_dict.get("title"),
+        time_start=date_time_start,
+        time_end=date_time_end,
+        type=TrainingType(training_dict.get("type")),
+        discipline=Discipline(training_dict.get("discipline")),
+        coach_id=training_dict.get("coach_id"),
+        individual_for_id=training_dict.get("individual_for_id"),
+        target_auditory=training_dict.get("target_auditory"),
+        target_gender=training_dict.get("target_gender")
+    )
+    new_training = await service.create_training(training_data=training_dto)
+    return {
+        "code": 201,
+        "status": "created",
+        "detail": {
+            "created_at": str(datetime.now()),
+            "content": new_training
+        }
+    }
 
 @app.delete("/users/me/coach/training/delete", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_training(
@@ -176,6 +200,12 @@ async def delete_training(
         await service.delete_training(
             training_id=training_id
         )
+        return {
+            "code": 204,
+            "status": "deleted",
+            "id": training_id
+        }
+    
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

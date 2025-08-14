@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, field_validator, Field
 from models.enums import Auditory, Discipline, Gender, TrainingType
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -35,18 +35,34 @@ class UserAddDTO(BaseModel):
 class UserDTO(UserAddDTO):
     id: int
 
-class TrainigOnInputDTO(BaseModel):
+class TrainingOnInputDTO(BaseModel):
     title: str
     description: Optional[str] = None
-    date: str
-    time_start: str
-    time_end: str
+    date: str = Field(..., example="2025-12-31")
+    time_start: str = Field(..., example="9:00:00")
+    time_end: str = Field(..., example="18:00:00")
     type: TrainingType
     discipline: Discipline
     coach_id: int
     individual_for_id: Optional[int] = None
-    target_auditory: Optional[Auditory] = None  # e.g., "adults", "children"
-    target_gender: Optional[Gender] = None
+    target_auditory: Optional[Auditory] = Field(default=None, example="adults")  # e.g., "adults", "children"
+    target_gender: Optional[Gender] = Field(default=None, example="men")
+
+    @field_validator("date")
+    def validate_date(cls, v):
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Date must be in a format 'YYYY-MM-DD'")
+        return v
+    
+    @field_validator("time_start", "time_end")
+    def validate_time(cls, v):
+        try:
+            datetime.strptime(v, "%H:%M:%S")
+        except ValueError: 
+            raise ValueError("Time must be in a format 'HH:MM:SS'")
+        return v
 
     @model_validator(mode="before")
     def validate_training_model(cls, values) -> dict:
