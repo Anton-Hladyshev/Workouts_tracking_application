@@ -409,7 +409,7 @@ class CoachService():
         self.user = user
 
     @staticmethod
-    async def calculate_target_users(session: AsyncSession, training: Training) -> Dict[str, int]:
+    async def calculate_target_users(session: AsyncSession, training: TrainingDTO) -> Dict[str, int]:
         data = []
 
         # Case of individual training
@@ -468,7 +468,7 @@ class CoachService():
             return training_data
 
             
-    async def update_training(self, training_id: int, **kwargs: Dict[str, Any]) -> None:
+    async def update_training(self, training_id: int, **kwargs: Dict[str, Any]) -> TrainingDTO:
             async with async_session_factory() as session:
                 try:
                     if not kwargs:
@@ -493,49 +493,35 @@ class CoachService():
                     new_time_end = datetime.combine(updated_date, updated_time_end)
                     kwargs["time_end"] = new_time_end
 
-                    #if kwargs.get("date") is not None:
-                    #    updated_date = datetime.strptime(kwargs.get("date"), "%Y-%m-%d").date()
-                    #    updated_time_start = datetime.combine(updated_date, training.time_start.time())
-                    #    updated_time_end = datetime.combine(updated_date, training.time_end.time())
-                    #    kwargs["time_start"] = str(updated_time_start)
-                    #    kwargs["time_end"] = str(updated_time_end)
-
-
-                    #if kwargs.get("time_start") is not None:
-                    #    updated_time_start = datetime.combine(updated_date, datetime.strptime(kwargs.get("time_start"), "%Y-%m-%d %H:%M:%S").time())
-                    #    kwargs["time_start"] = updated_time_start
-
-                    #if kwargs.get("time_end") is not None:
-                    #    updated_time_end = datetime.combine(updated_date, datetime.strptime(kwargs.get("time_end"), "%Y-%m-%d %H:%M:%S").time())
-                    #    kwargs["time_end"] = updated_time_end
-
 
                     for key, value in kwargs.items():
                         if hasattr(training, key):
                             setattr(training, key, value)
 
+                    training_dto = TrainingDTO.model_validate(training, from_attributes=True)
+
                     #if the training type or target auditory, or target gender has changed, we need to recalculate the target users
-                    if not (training.type == filter_params["type"] and training.target_auditory == filter_params["target_auditory"] and training.target_gender == filter_params["target_gender"]):
-                        data = []
+                    if not (training_dto.type == filter_params["type"] and training_dto.target_auditory == filter_params["target_auditory"] and training_dto.target_gender == filter_params["target_gender"]):
+                        data_target_users = []
 
                         # delete old target users for this training
                         await session.execute(
                             delete(
                                 AvailableTraining
                                 ).where(
-                                    AvailableTraining.training_id == training.id
+                                    AvailableTraining.training_id == training_dto.id
                                 )
                         )
 
                         # add new target users for this training
-                        data = await self.calculate_target_users(session, training)
+                        data_target_users = await self.calculate_target_users(session, training_dto)
 
-                        if data:
-                            stmt = pg_insert(AvailableTraining).values(data).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
+                        if data_target_users:
+                            stmt = pg_insert(AvailableTraining).values(data_target_users).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
                             await session.execute(stmt)
 
                     await session.commit()
-                    #return TrainingAddDTO.model_validate(training, from_attributes=True)
+                    return training_dto
 
                 except Exception as ex:
                     await session.rollback()

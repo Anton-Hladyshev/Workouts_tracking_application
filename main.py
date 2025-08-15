@@ -236,10 +236,10 @@ async def update_training(
         "code": 200,
         "status": "updated",
         "detail": {
-            "updated_at": str(datetime.now())
+            "updated_at": str(datetime.now()),
+            "content": updated_training
         }
     }
-
 
 @app.get("/users/me/client", response_model=UserDTO)
 async def read_current_client(
@@ -293,13 +293,3 @@ async def subscribe_to_trainig(
             detail="No available trainings with this ID",
             headers={"WWW-Authenticate": "Bearer"}
         )
-    
-
-#@app.get("/users/me/items/")
-#async def read_own_items(
-#    current_user: Annotated[UserInDb, Depends(get_current_active_user)]
-#) -> dict[str, str]:
-#    return {
-#        "item": "This is your item",
-#        "owner": current_user.username
-#    }
