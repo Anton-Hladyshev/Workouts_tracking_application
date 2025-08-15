@@ -1,7 +1,9 @@
 from pydantic import BaseModel, model_validator, field_validator, Field
 from models.enums import Auditory, Discipline, Gender, TrainingType
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, date as _date
+
+from schemas.exceptions import TimeValidationError
 
 class UserAddDTO(BaseModel):
     name: str
@@ -36,19 +38,18 @@ class UserDTO(UserAddDTO):
     id: int
 
 class TrainingOnInputDTO(BaseModel):
-    title: str
-    description: Optional[str] = None
-    date: str = Field(..., example="2025-12-31")
-    time_start: str = Field(..., example="9:00:00")
-    time_end: str = Field(..., example="18:00:00")
-    type: TrainingType
-    discipline: Discipline
-    coach_id: int
-    individual_for_id: Optional[int] = None
-    target_auditory: Optional[Auditory] = Field(default=None, example="adults")  # e.g., "adults", "children"
-    target_gender: Optional[Gender] = Field(default=None, example="men")
+    title: str = Field(default="New training", description="A title of a new training")
+    description: Optional[str] = Field(default=" ", description="Description of a training")
+    date: _date = Field(..., example="2025-12-31")
+    time_start: time = Field(..., example="9:00:00")
+    time_end: time = Field(..., example="18:00:00")
+    type: TrainingType = Field(default=TrainingType.GROUP, description="A type of a training: group or individual. For a individual training the parameter individual_for_id is required")
+    discipline: Discipline = Field(default=Discipline.MMA, description="Discipline of a training: MMA, striking, boxe feminin, wrestling, BJJ, physical_preparation")
+    individual_for_id: Optional[int] = Field(default=None, description="Id of a person for whom this training is dedicated. Should be specified only if the type is 'individual'")
+    target_auditory: Optional[Auditory] = Field(default=None, example="adults", description="For clients of which specific age group this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all age groups")  # e.g., "adults", "children"
+    target_gender: Optional[Gender] = Field(default=None, example="men", description="For clients of which specific gender this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all genders")
 
-    @field_validator("date")
+    @field_validator("date", mode="before")
     def validate_date(cls, v):
         try:
             if v is not None:
@@ -57,28 +58,27 @@ class TrainingOnInputDTO(BaseModel):
             raise ValueError("Date must be in a format 'YYYY-MM-DD'")
         return v
     
-    @field_validator("time_start", "time_end")
+    @field_validator("time_start", "time_end", mode="before")
     def validate_time(cls, v):
         try:
             if v is not None:
                 datetime.strptime(v, "%H:%M:%S")
-        except ValueError: 
-            raise ValueError("Time must be in a format 'HH:MM:SS'")
-        return v
-
-    @model_validator(mode="before")
-    def validate_training_model(cls, values) -> dict:
-        if isinstance(values, dict):
-            type_ = values.get("type")
-            individual_for_id = values.get("individual_for_id")
-            target_auditory = values.get("target_auditory")
-            target_gender = values.get("target_gender")
+            return v
+        except ValueError:
+            raise ValueError("Time should be in a format 'HH:MM:SS'")
         
-        else:
-            type_ = values.type
-            individual_for_id = values.individual_for_id
-            target_auditory = values.target_auditory
-            target_gender = values.target_gender
+    @model_validator(mode="after")
+    def check_time_and_business_rules(self):
+        #check time
+        if self.time_start is not None and self.time_end is not None:
+            if self.time_start > self.time_end:
+                raise TimeValidationError("The time of the end of a training should be grater then the time of the start of the training")
+        
+        #check business rules
+        type_ = self.type
+        individual_for_id = self.individual_for_id
+        target_auditory = self.target_auditory
+        target_gender = self.target_gender
 
         if type_ == TrainingType.INDIVIDUAL and not individual_for_id:
             raise ValueError("Individual training must have an id of a specific student")
@@ -86,18 +86,18 @@ class TrainingOnInputDTO(BaseModel):
             raise ValueError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
         if type_ == TrainingType.GROUP and individual_for_id:
             raise ValueError("Group training cannot have an id of a specific student")
+        
+        return self
     
-        return values
 
 class TrainingOnInputToUpdateDTO(TrainingOnInputDTO):
     title: Optional[str] = None
     description: Optional[str] = None
-    date: Optional[str] = Field(default=None, example="2025-12-31")
-    time_start: Optional[str] = Field(default=None, example="9:00:00")
-    time_end: Optional[str] = Field(default=None, example="18:00:00")
+    date: Optional[_date] = Field(default=None, example="2025-12-31")
+    time_start: Optional[time] = Field(default=None, example="9:00:00")
+    time_end: Optional[time] = Field(default=None, example="18:00:00")
     type: Optional[TrainingType] = None
     discipline: Optional[Discipline] = None
-    coach_id: Optional[int] = None
     individual_for_id: Optional[int] = None
     target_auditory: Optional[Auditory] = Field(default=None, example="adults")  # e.g., "adults", "children"
     target_gender: Optional[Gender] = Field(default=None, example="men")

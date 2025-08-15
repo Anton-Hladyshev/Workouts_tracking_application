@@ -2,6 +2,8 @@ import sys
 import pathlib
 from typing import Any, Dict, List, Sequence, Tuple
 
+from schemas.exceptions import InvalidPermissionsError
+
 
 root_path = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_path))
@@ -14,7 +16,6 @@ from app.config import settings
 from models.models import Auditory, Gender, User, Training, TrainingType, Discipline, Subscription, AvailableTraining
 from datetime import date, datetime, time
 from schemas.schemas import *
-from schemas.exceptions import ForbiddenActionError
 
 async_engine = create_async_engine(
     url=settings.get_db_url_with_asyncpg, 
@@ -477,6 +478,9 @@ class CoachService():
                     training = await session.get(Training, training_id)
                     if not training:
                         raise ValueError("Training not found")
+
+                    if training.coach_id != self.user.id:
+                        raise InvalidPermissionsError("You can't modify this training because you are not a coach of this training")
                     
                     filter_params = {
                         "type": training.type,
@@ -484,9 +488,9 @@ class CoachService():
                         "target_gender": training.target_gender
                     }
 
-                    updated_date = CoachService.to_date(kwargs.get("date", training.time_start.date()))
-                    updated_time_start = CoachService.to_time(kwargs.get("time_start", training.time_start.time()))
-                    updated_time_end = CoachService.to_time(kwargs.get("time_end", training.time_end.time()))
+                    updated_date = kwargs.get("date", training.time_start.date())
+                    updated_time_start = kwargs.get("time_start", training.time_start.time())
+                    updated_time_end = kwargs.get("time_end", training.time_end.time())
 
                     new_time_start = datetime.combine(updated_date, updated_time_start)
                     kwargs["time_start"] = new_time_start
@@ -529,38 +533,21 @@ class CoachService():
                 
     async def delete_training(self, training_id: int) -> None:
         async with async_session_factory() as session:
-            training = await ORMBase.get_training_by_id(training_id)
-            if not training:
-                raise ValueError("Training not found")
-            if training.coach_id != self.user.id:
-                raise ForbiddenActionError("You do not have permission to delete this training.")
+            try:
+                training = await ORMBase.get_training_by_id(training_id)
+                if not training:
+                    raise ValueError("Training not found")
+                if training.coach_id != self.user.id:
+                    raise InvalidPermissionsError("You do not have permission to delete this training.")
 
-            await session.execute(
-                delete(Training).where(Training.id == training_id)
-            )
-            await session.commit()
-
-    @staticmethod
-    def to_time(value: str | time) -> time:
-        if isinstance(value, str):
-            return datetime.strptime(value, "%H:%M:%S").time()
-        
-        elif isinstance(value, time):
-            return value
-        
-        else:
-            raise ValueError(f"Unsupportable format of time: {value}")
-        
-    @staticmethod
-    def to_date(value: str | date) -> date:
-        if isinstance(value, str):
-            return datetime.strptime(value, "%Y-%m-%d").date()
-        
-        elif isinstance(value, date):
-            return value
-        
-        else:
-            raise ValueError(f"Unsupportable format of date: {value}")
+                await session.execute(
+                    delete(Training).where(Training.id == training_id)
+                )
+                await session.commit()
+            except Exception as ex:
+                await session.rollback()
+                raise ex
+            
 
     def get_user(self) -> UserDTO:
         return self.user

@@ -2,14 +2,15 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, List
 
 import jwt
-from fastapi import Body, Depends, FastAPI, HTTPException, status, Query
+from fastapi import Body, Depends, FastAPI, HTTPException, status, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from models.enums import Discipline, Role, TrainingType
 from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, TrainingOnInputToUpdateDTO, UserDTO
-from schemas.exceptions import ForbiddenActionError
+from schemas.exceptions import InvalidPermissionsError, TimeValidationError
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
 from dotenv import load_dotenv
@@ -158,7 +159,7 @@ async def read_current_coach(
 ) -> UserDTO:
     service = CoachService(current_user)
     return service.get_user()
-
+    
 @app.post("/users/me/coach/training/create", status_code=status.HTTP_201_CREATED)
 async def create_training(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)],
@@ -176,7 +177,7 @@ async def create_training(
         time_end=date_time_end,
         type=TrainingType(training_dict.get("type")),
         discipline=Discipline(training_dict.get("discipline")),
-        coach_id=training_dict.get("coach_id"),
+        coach_id=current_user.id,
         individual_for_id=training_dict.get("individual_for_id"),
         target_auditory=training_dict.get("target_auditory"),
         target_gender=training_dict.get("target_gender")
@@ -210,12 +211,6 @@ async def delete_training(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="There is not any training with this ID.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    except ForbiddenActionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=e.message,
             headers={"WWW-Authenticate": "Bearer"}
         )
     
@@ -293,3 +288,23 @@ async def subscribe_to_trainig(
             detail="No available trainings with this ID",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+
+"""Exceptions"""
+@app.exception_handler(TimeValidationError)
+async def time_validation_exception_handler(request: Request, exc: TimeValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.message
+        }
+    )
+
+@app.exception_handler(InvalidPermissionsError)
+async def permissions_validation_exception_handler(request: Request, exc: TimeValidationError):
+    return JSONResponse(
+        status_code=403,
+        content={
+            "detail": exc.message
+        }
+    )
