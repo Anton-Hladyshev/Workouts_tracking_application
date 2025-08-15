@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import settings
 from models.models import Auditory, Gender, User, Training, TrainingType, Discipline, Subscription, AvailableTraining
-from datetime import datetime
+from datetime import date, datetime, time
 from schemas.schemas import *
 from schemas.exceptions import ForbiddenActionError
 
@@ -468,29 +468,51 @@ class CoachService():
             return training_data
 
             
-            
     async def update_training(self, training_id: int, **kwargs: Dict[str, Any]) -> None:
             async with async_session_factory() as session:
                 try:
                     if not kwargs:
                         raise ValueError("No fields to update")
                     
-                    training = await ORMBase.get_training_by_id(training_id)
+                    training = await session.get(Training, training_id)
+                    if not training:
+                        raise ValueError("Training not found")
+                    
                     filter_params = {
                         "type": training.type,
                         "target_auditory": training.target_auditory,
-                        "target_gender": training.target_auditory
+                        "target_gender": training.target_gender
                     }
 
-                    if not training:
-                        raise ValueError("Training not found")
+                    updated_date = CoachService.to_date(kwargs.get("date", training.time_start.date()))
+                    updated_time_start = CoachService.to_time(kwargs.get("time_start", training.time_start.time()))
+                    updated_time_end = CoachService.to_time(kwargs.get("time_end", training.time_end.time()))
+
+                    new_time_start = datetime.combine(updated_date, updated_time_start)
+                    kwargs["time_start"] = new_time_start
+                    new_time_end = datetime.combine(updated_date, updated_time_end)
+                    kwargs["time_end"] = new_time_end
+
+                    #if kwargs.get("date") is not None:
+                    #    updated_date = datetime.strptime(kwargs.get("date"), "%Y-%m-%d").date()
+                    #    updated_time_start = datetime.combine(updated_date, training.time_start.time())
+                    #    updated_time_end = datetime.combine(updated_date, training.time_end.time())
+                    #    kwargs["time_start"] = str(updated_time_start)
+                    #    kwargs["time_end"] = str(updated_time_end)
+
+
+                    #if kwargs.get("time_start") is not None:
+                    #    updated_time_start = datetime.combine(updated_date, datetime.strptime(kwargs.get("time_start"), "%Y-%m-%d %H:%M:%S").time())
+                    #    kwargs["time_start"] = updated_time_start
+
+                    #if kwargs.get("time_end") is not None:
+                    #    updated_time_end = datetime.combine(updated_date, datetime.strptime(kwargs.get("time_end"), "%Y-%m-%d %H:%M:%S").time())
+                    #    kwargs["time_end"] = updated_time_end
+
 
                     for key, value in kwargs.items():
                         if hasattr(training, key):
                             setattr(training, key, value)
-
-                    session.add(training)
-                    await session.flush()
 
                     #if the training type or target auditory, or target gender has changed, we need to recalculate the target users
                     if not (training.type == filter_params["type"] and training.target_auditory == filter_params["target_auditory"] and training.target_gender == filter_params["target_gender"]):
@@ -513,6 +535,7 @@ class CoachService():
                             await session.execute(stmt)
 
                     await session.commit()
+                    #return TrainingAddDTO.model_validate(training, from_attributes=True)
 
                 except Exception as ex:
                     await session.rollback()
@@ -530,6 +553,28 @@ class CoachService():
                 delete(Training).where(Training.id == training_id)
             )
             await session.commit()
+
+    @staticmethod
+    def to_time(value: str | time) -> time:
+        if isinstance(value, str):
+            return datetime.strptime(value, "%H:%M:%S").time()
+        
+        elif isinstance(value, time):
+            return value
+        
+        else:
+            raise ValueError(f"Unsupportable format of time: {value}")
+        
+    @staticmethod
+    def to_date(value: str | date) -> date:
+        if isinstance(value, str):
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        
+        elif isinstance(value, date):
+            return value
+        
+        else:
+            raise ValueError(f"Unsupportable format of date: {value}")
 
     def get_user(self) -> UserDTO:
         return self.user

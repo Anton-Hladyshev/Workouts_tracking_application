@@ -51,7 +51,8 @@ class TrainingOnInputDTO(BaseModel):
     @field_validator("date")
     def validate_date(cls, v):
         try:
-            datetime.strptime(v, "%Y-%m-%d")
+            if v is not None:
+                datetime.strptime(v, "%Y-%m-%d")
         except ValueError:
             raise ValueError("Date must be in a format 'YYYY-MM-DD'")
         return v
@@ -59,7 +60,8 @@ class TrainingOnInputDTO(BaseModel):
     @field_validator("time_start", "time_end")
     def validate_time(cls, v):
         try:
-            datetime.strptime(v, "%H:%M:%S")
+            if v is not None:
+                datetime.strptime(v, "%H:%M:%S")
         except ValueError: 
             raise ValueError("Time must be in a format 'HH:MM:SS'")
         return v
@@ -86,6 +88,19 @@ class TrainingOnInputDTO(BaseModel):
             raise ValueError("Group training cannot have an id of a specific student")
     
         return values
+
+class TrainingOnInputToUpdateDTO(TrainingOnInputDTO):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[str] = Field(default=None, example="2025-12-31")
+    time_start: Optional[str] = Field(default=None, example="9:00:00")
+    time_end: Optional[str] = Field(default=None, example="18:00:00")
+    type: Optional[TrainingType] = None
+    discipline: Optional[Discipline] = None
+    coach_id: Optional[int] = None
+    individual_for_id: Optional[int] = None
+    target_auditory: Optional[Auditory] = Field(default=None, example="adults")  # e.g., "adults", "children"
+    target_gender: Optional[Gender] = Field(default=None, example="men")
 
 class TrainingAddDTO(BaseModel):
     title: str

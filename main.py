@@ -8,7 +8,7 @@ from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from models.enums import Discipline, Role, TrainingType
-from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, UserDTO
+from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, TrainingOnInputToUpdateDTO, UserDTO
 from schemas.exceptions import ForbiddenActionError
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
@@ -191,7 +191,7 @@ async def create_training(
         }
     }
 
-@app.delete("/users/me/coach/training/delete", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/users/me/coach/training/delete/{training_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_training(
     training_id: int,
     current_user: Annotated[UserDTO, Depends(get_curent_coach)]) -> None:
@@ -218,6 +218,28 @@ async def delete_training(
             detail=e.message,
             headers={"WWW-Authenticate": "Bearer"}
         )
+    
+@app.patch("/users/me/coach/training/update/{training_id}", status_code=status.HTTP_200_OK)
+async def update_training(
+    current_user: Annotated[UserDTO, Depends(get_curent_coach)],
+    training_id: int,
+    update_data: TrainingOnInputToUpdateDTO = Body()
+        ):
+    service = CoachService(current_user)
+
+    updated_training = await service.update_training(
+        training_id=training_id,
+        **update_data.model_dump(exclude_unset=True)
+    )
+
+    return {
+        "code": 200,
+        "status": "updated",
+        "detail": {
+            "updated_at": str(datetime.now())
+        }
+    }
+
 
 @app.get("/users/me/client", response_model=UserDTO)
 async def read_current_client(
