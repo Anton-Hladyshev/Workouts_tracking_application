@@ -107,44 +107,47 @@ class TrainingSearchDTO(BaseModel):
     description: Optional[str] = Field(default=None, description="Description of a training")
     date_start_search: Optional[_date] = Field(default_factory=lambda: datetime.today().date(), example="2024-12-31")
     date_end_search: Optional[_date] = Field(default=None, example="2025-12-31")
-    time_start: Optional[time] = Field(default=datetime.strptime("00:00:00", "%H:%M:%S").time(), example="9:00:00")
-    time_end: Optional[time] = Field(default=datetime.strptime("23:59:59", "%H:%M:%S").time(), example="18:00:00")
+    time_start_search: Optional[time] = Field(default=datetime.strptime("00:00:00", "%H:%M:%S").time(), example="9:00:00")
+    time_end_search: Optional[time] = Field(default=datetime.strptime("23:59:59", "%H:%M:%S").time(), example="18:00:00")
     type: Optional[TrainingType] = Field(default=None, description="A type of a training: group or individual. For a individual training the parameter individual_for_id is required")
     discipline: Optional[Discipline] = Field(default=None, description="Discipline of a training: MMA, striking, boxe feminin, wrestling, BJJ, physical_preparation")
     individual_for_id: Optional[int] = Field(default=None, description="Id of a person for whom this training is dedicated. Should be specified only if the type is 'individual'")
     target_auditory: Optional[Auditory] = Field(default=None, example="adults", description="For clients of which specific age group this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all age groups")  # e.g., "adults", "children"
     target_gender: Optional[Gender] = Field(default=None, example="men", description="For clients of which specific gender this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all genders")
 
-    @model_validator( mode="after")
+    @field_validator("date_start_search", "date_end_search", mode="before")
+    def validate_date(cls, v):
+        if isinstance(v, _date):
+            return v
+        if isinstance(v, str):
+            try:
+                return datetime.strptime(v, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError("Date must be in a format 'YYYY-MM-DD'")
+        return v
+
+    @field_validator("time_start_search", "time_end_search", "time_start_search", "time_end_search", mode="before")
+    def validate_time(cls, v):
+        if isinstance(v, time):
+            return v
+        if isinstance(v, str):
+            try:
+                return datetime.strptime(v, "%H:%M:%S").time()
+            except ValueError:
+                raise ValueError("Time should be in a format 'HH:MM:SS'")
+        return v
+
+    @model_validator(mode="after")
     def set_date_end_search_default_value(self):
         if self.date_start_search and not self.date_end_search:
             self.date_end_search = self.date_start_search + timedelta(days=7)
         return self
-
-
-    @field_validator("date_start_search", "date_end_search", mode="before")
-    def validate_date(cls, v):
-        try:
-            if v is not None:
-                datetime.strptime(v, "%Y-%m-%d")
-        except ValueError:
-            raise ValueError("Date must be in a format 'YYYY-MM-DD'")
-        return v
-    
-    @field_validator("time_start", "time_end", mode="before")
-    def validate_time(cls, v):
-        try:
-            if v is not None:
-                datetime.strptime(v, "%H:%M:%S")
-            return v
-        except ValueError:
-            raise ValueError("Time should be in a format 'HH:MM:SS'")
         
     @model_validator(mode="after")
     def check_time_and_business_rules(self):
         #check time
-        if self.time_start is not None and self.time_end is not None:
-            if self.time_start > self.time_end:
+        if self.time_start_search is not None and self.time_end_search is not None:
+            if self.time_start_search > self.time_end_search:
                 raise TimeValidationError("The time of the end of a training should be grater then the time of the start of the training")
             
         if self.date_start_search is not None and self.date_end_search is not None:

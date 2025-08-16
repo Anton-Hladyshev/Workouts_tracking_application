@@ -8,7 +8,7 @@ from schemas.exceptions import InvalidPermissionsError
 root_path = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_path))
 
-from sqlalchemy import delete, exists, select, and_, or_
+from sqlalchemy import delete, exists, select, and_, or_, cast, Date, Time
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -441,17 +441,50 @@ class CoachService():
 
     async def get_trainings(self, training_data: TrainingSearchDTO) -> List[TrainingDTO]:
         async with async_session_factory() as session:
-            training_data_dict = training_data.model_dump(exclude_unset=True)
+            training_data_dict = training_data.model_dump(exclude_none=True)
 
-            time_start = training_data_dict.get("time_start")
-            time_end = training_data_dict.get("time_end")
+            time_start_search = training_data_dict.get("time_start_search")
+            time_end_search = training_data_dict.get("time_end_search")
 
             date_start_search = training_data_dict.get("date_start_search")
             date_end_search = training_data_dict.get("date_end_search")
 
-            no_datetime_filters = {
-                #TODO
+            no_datetime_filters = []
+
+            filter_map = {
+                'title': Training.title,
+                'description': Training.description,
+                'type': Training.type,
+                'discipline': Training.discipline,
+                "individual_for_id": Training.individual_for_id,
+                "target_auditory": Training.target_auditory,
+                "target_gender": Training.target_gender
             }
+
+            for key, value in training_data_dict.items():
+                if not isinstance(value, date) and not isinstance(value, time):
+                    no_datetime_filters.append(filter_map.get(key) == value)
+
+            query = select(
+                Training
+            ).where(
+                and_(
+                    and_(
+                        *no_datetime_filters
+                    ), 
+                    and_(
+                        cast(Training.time_start, Time).between(time_start_search, time_end_search),
+                        cast(Training.time_end, Time).between(time_start_search, time_end_search),
+                        cast(Training.time_start, Date).between(date_start_search, date_end_search)
+                    ),
+                    Training.coach_id == self.user.id
+                )
+            )
+
+            result = await session.execute(query)
+
+            return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
+
 
     async def create_training(self, training_data: TrainingAddDTO) -> TrainingAddDTO:
         async with async_session_factory() as session:
