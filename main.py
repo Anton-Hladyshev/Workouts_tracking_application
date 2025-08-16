@@ -8,8 +8,8 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from models.enums import Discipline, Role, TrainingType
-from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, TrainingOnInputToUpdateDTO, UserDTO
+from models.enums import Auditory, Discipline, Gender, Role, TrainingType
+from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, TrainingOnInputToUpdateDTO, TrainingSearchDTO, UserDTO
 from schemas.exceptions import InvalidPermissionsError, TimeValidationError
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
@@ -159,6 +159,40 @@ async def read_current_coach(
 ) -> UserDTO:
     service = CoachService(current_user)
     return service.get_user()
+
+@app.get("/users/me/coach/training/get", status_code=status.HTTP_200_OK, response_model=List[TrainingDTO])
+async def get_trainings(
+    current_user: Annotated[UserDTO, Depends(get_curent_coach)],
+    title: str | None = None,
+    description: str | None = None,
+    date_start_search: str | None = None,
+    date_end_search: str | None = None,
+    time_start: str | None = None,
+    time_end: str | None = None,
+    type_: TrainingType | None = None,
+    individual_for_id: int | None = None,
+    discipline: Discipline | None = None,
+    target_auditory: Auditory | None = None,
+    target_gender: Gender | None = None
+):
+    service = CoachService(current_user)
+    training_dto = TrainingSearchDTO(
+        title=title,
+        description=description,
+        date_start_search=date_start_search,
+        date_end_search=date_end_search,
+        time_start=time_start,
+        time_end=time_end,
+        type=type_,
+        individual_for_id=individual_for_id,
+        discipline=discipline,
+        target_gender=target_gender,
+        target_auditory=target_auditory
+    )
+    
+
+    #TODO
+
     
 @app.post("/users/me/coach/training/create", status_code=status.HTTP_201_CREATED)
 async def create_training(

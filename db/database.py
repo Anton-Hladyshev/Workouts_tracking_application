@@ -439,6 +439,19 @@ class CoachService():
 
         return data
 
+    async def get_trainings(self, training_data: TrainingSearchDTO) -> List[TrainingDTO]:
+        async with async_session_factory() as session:
+            training_data_dict = training_data.model_dump(exclude_unset=True)
+
+            time_start = training_data_dict.get("time_start")
+            time_end = training_data_dict.get("time_end")
+
+            date_start_search = training_data_dict.get("date_start_search")
+            date_end_search = training_data_dict.get("date_end_search")
+
+            no_datetime_filters = {
+                #TODO
+            }
 
     async def create_training(self, training_data: TrainingAddDTO) -> TrainingAddDTO:
         async with async_session_factory() as session:
