@@ -11,3 +11,10 @@ class TimeValidationError(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
+class BusinessRulesValidationError(Exception):
+    """Exception raised in case of business logic violation."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)

@@ -10,7 +10,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from models.enums import Auditory, Discipline, Gender, Role, TrainingType
 from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, TrainingOnInputToUpdateDTO, TrainingSearchDTO, UserDTO
-from schemas.exceptions import InvalidPermissionsError, TimeValidationError
+from schemas.exceptions import InvalidPermissionsError, TimeValidationError, BusinessRulesValidationError
 from pydantic import BaseModel
 from db.database import ORMBase, ClientService, CoachService, async_session_factory
 from dotenv import load_dotenv
@@ -338,6 +338,16 @@ async def time_validation_exception_handler(request: Request, exc: TimeValidatio
 async def permissions_validation_exception_handler(request: Request, exc: TimeValidationError):
     return JSONResponse(
         status_code=403,
+        content={
+            "detail": exc.message
+        }
+    )
+
+
+@app.exception_handler(BusinessRulesValidationError)
+async def business_logic_validation_exception_handler(request: Request, exc: BusinessRulesValidationError):
+    return JSONResponse(
+        status_code=422,
         content={
             "detail": exc.message
         }

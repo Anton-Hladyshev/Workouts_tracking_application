@@ -3,7 +3,7 @@ from models.enums import Auditory, Discipline, Gender, TrainingType
 from typing import List, Optional
 from datetime import datetime, timedelta, time, date as _date
 
-from schemas.exceptions import TimeValidationError
+from schemas.exceptions import TimeValidationError, BusinessRulesValidationError
 
 class UserAddDTO(BaseModel):
     name: str
@@ -55,7 +55,7 @@ class TrainingOnInputDTO(BaseModel):
             if v is not None:
                 datetime.strptime(v, "%Y-%m-%d")
         except ValueError:
-            raise ValueError("Date must be in a format 'YYYY-MM-DD'")
+            raise TimeValidationError("Date must be in a format 'YYYY-MM-DD'")
         return v
     
     @field_validator("time_start", "time_end", mode="before")
@@ -65,7 +65,7 @@ class TrainingOnInputDTO(BaseModel):
                 datetime.strptime(v, "%H:%M:%S")
             return v
         except ValueError:
-            raise ValueError("Time should be in a format 'HH:MM:SS'")
+            raise TimeValidationError("Time should be in a format 'HH:MM:SS'")
         
     @model_validator(mode="after")
     def check_time_and_business_rules(self):
@@ -81,11 +81,11 @@ class TrainingOnInputDTO(BaseModel):
         target_gender = self.target_gender
 
         if type_ == TrainingType.INDIVIDUAL and not individual_for_id:
-            raise ValueError("Individual training must have an id of a specific student")
+            raise BusinessRulesValidationError("Individual training must have an id of a specific student")
         if type_ == TrainingType.INDIVIDUAL and (target_auditory or target_gender):
-            raise ValueError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
+            raise BusinessRulesValidationError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
         if type_ == TrainingType.GROUP and individual_for_id:
-            raise ValueError("Group training cannot have an id of a specific student")
+            raise BusinessRulesValidationError("Group training cannot have an id of a specific student")
         
         return self
     
@@ -123,7 +123,7 @@ class TrainingSearchDTO(BaseModel):
             try:
                 return datetime.strptime(v, "%Y-%m-%d").date()
             except ValueError:
-                raise ValueError("Date must be in a format 'YYYY-MM-DD'")
+                raise TimeValidationError("Date must be in a format 'YYYY-MM-DD'")
         return v
 
     @field_validator("time_start_search", "time_end_search", "time_start_search", "time_end_search", mode="before")
@@ -134,7 +134,7 @@ class TrainingSearchDTO(BaseModel):
             try:
                 return datetime.strptime(v, "%H:%M:%S").time()
             except ValueError:
-                raise ValueError("Time should be in a format 'HH:MM:SS'")
+                raise TimeValidationError("Time should be in a format 'HH:MM:SS'")
         return v
 
     @model_validator(mode="after")
@@ -160,12 +160,10 @@ class TrainingSearchDTO(BaseModel):
         target_auditory = self.target_auditory
         target_gender = self.target_gender
 
-        if type_ == TrainingType.INDIVIDUAL and not individual_for_id:
-            raise ValueError("Individual training must have an id of a specific student")
         if type_ == TrainingType.INDIVIDUAL and (target_auditory or target_gender):
-            raise ValueError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
+            raise BusinessRulesValidationError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
         if type_ == TrainingType.GROUP and individual_for_id:
-            raise ValueError("Group training cannot have an id of a specific student")
+            raise BusinessRulesValidationError("Group training cannot have an id of a specific student")
         
         return self
 
