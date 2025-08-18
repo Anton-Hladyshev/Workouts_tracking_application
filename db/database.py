@@ -268,6 +268,24 @@ class ORMBase():
         else:
             result = await session.execute(query)
             return result.scalar()
+        
+    @staticmethod
+    async def subscription_exists(session: AsyncSession | None, user_id: int, training_id: int):
+        query = select(
+                exists().where(
+                    Subscription.student_id == user_id,
+                    Subscription.training_id == training_id
+                )
+            )
+        if not session:
+            async with async_session_factory() as session:
+                subscription_exeists = await session.execute(query)
+                
+        else:
+            subscription_exeists = await session.execute(query)
+
+        return subscription_exeists.scalar()
+
 
     @staticmethod 
     async def register_new_user(user: UserAddDTO, session: AsyncSession | None = None) -> None:
@@ -382,6 +400,33 @@ class ClientService():
             except Exception as ex:
                 await session.rollback()
                 raise ex
+            
+    async def unsubscribe_from_training(self, training_id: int) -> SubscriptionDTO:
+        async with async_session_factory() as session:
+            subscription_exists = ORMBase.subscription_exists(session=session, user_id=self.user.id, training_id=training_id)
+            
+            if not subscription_exists:
+                raise ValueError(f"Training with id={training_id} was not found in your subscriptions")
+            
+            subscription_dto = SubscriptionDTO(
+                user_id = self.user.id,
+                training_id=training_id
+            )
+            
+            query = delete(
+                Subscription
+            ).where(
+                and_(
+                    Subscription.training_id == subscription_dto.training_id,
+                    Subscription.student_id == subscription_dto.user_id
+                )
+            )
+
+            await session.execute(query)
+            await session.commit()
+
+            return subscription_dto
+
 
     async def available_training_exists(self, training_id: int, session: AsyncSession | None = None) -> bool:
         """Check if a user is available for a specific training."""

@@ -322,6 +322,20 @@ async def subscribe_to_trainig(
             detail="No available trainings with this ID",
             headers={"WWW-Authenticate": "Bearer"}
         )
+    
+@app.delete("/users/me/client/unsubscribe", status_code=status.HTTP_204_NO_CONTENT)
+async def unsubscribe_from_training(
+    training_id: int,
+    current_user: Annotated[UserDTO, Depends(get_current_client)]
+):
+    service = ClientService(current_user)
+    try:
+        await service.unsubscribe_from_training(training_id=training_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"A subscription on a training with id={training_id} was not found in your subscriptions."
+        )
 
 
 """Exceptions"""
