@@ -1,141 +1,19 @@
 from datetime import datetime, timedelta, timezone, date as date_, time as time_
 from typing import Annotated, List
 
-import jwt
 from fastapi import Body, Depends, FastAPI, HTTPException, status, Query, Request
 from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jwt.exceptions import InvalidTokenError
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
 from models.enums import Auditory, Discipline, Gender, Role, TrainingType
 from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, TrainingOnInputToUpdateDTO, TrainingSearchDTO, UserDTO
 from schemas.exceptions import InvalidPermissionsError, TimeValidationError, BusinessRulesValidationError
-from pydantic import BaseModel
-from db.database import ORMBase, ClientService, CoachService, async_session_factory
+from db.database import ClientService, CoachService, async_session_factory
 from dotenv import load_dotenv
 import os
+from app.routers.auth import get_current_user, router as auth_router
 
-load_dotenv()
-
-jwt_key = os.getenv("SECRET_KEY")
-jwt_expire_delta = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
-jwt_alghorithm = os.getenv("ALGHORITHM")
-
-ph = PasswordHasher()
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 app = FastAPI()
 
-class AccessToken(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    username: str | None = None
-
-
-def verify_password(hashed_password: str, plain_password: str) -> bool:
-    """Verify if the provided password matches the hashed password."""
-    is_correct = True
-    try:
-        ph.verify(hashed_password, plain_password)
-    except VerifyMismatchError:
-        is_correct = False
-    return is_correct
-
-def get_password_hash(password: str) -> str:
-    """Hash the provided password using Argon2."""
-    return ph.hash(password)
-
-async def get_user(username: str) -> UserDTO | None:
-    """Retrieve a user by username from the database."""
-    async with async_session_factory() as session:
-        params = {
-            "name": username
-        }
-        user = await ORMBase.get_user_by(ession=session, **params)
-        
-        return user
-    
-async def authenticate_user(username: str, password: str) -> UserDTO | bool:
-    """Authenticate a user by verifying the username and password."""
-    user = await get_user(username)
-    if not user:
-        return False
-    if not verify_password(user.password, password):
-        return False
-    return user
-    
-def create_access_token(
-    data: dict, expires_delta: timedelta | None = None
-                        ) -> str:
-    """Create a JWT access token with an expiration time."""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(payload=to_encode, key=jwt_key, algorithm=jwt_alghorithm)
-    return encoded_jwt
-
-async def get_current_user(
-        token: Annotated[str, Depends(oauth2_scheme)]
-) -> UserDTO:
-    """Get the current user from the JWT token."""
-    creditials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"}
-    )
-
-    try:
-        payload = jwt.decode(token, jwt_key, algorithms=[jwt_alghorithm])
-        username = payload.get("sub")
-        if username is None:
-            raise creditials_exception
-        token_data = TokenData(username=username)
-    except InvalidTokenError:
-        raise creditials_exception
-    user = await get_user(username=token_data.username)
-    if not user:
-        raise creditials_exception
-    return user
-
-
-@app.post('/token')
-async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
-) -> AccessToken:
-    user = await authenticate_user(form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    access_token_expires = timedelta(minutes=jwt_expire_delta)
-    access_token = create_access_token(
-        data={"sub":user.name},
-        expires_delta=access_token_expires
-    )
-
-    return AccessToken(
-        access_token=access_token,
-        token_type="bearer"
-    )
-
-def get_curent_coach(user: UserDTO = Depends(get_current_user)) -> UserDTO:
-    if user.role != Role.COACH:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. You are not a coach.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    
-    return user
+app.include_router(auth_router)
 
 def get_current_client(user: UserDTO = Depends(get_current_user)) -> UserDTO:
     if user.role != Role.STUDENT:
@@ -147,11 +25,16 @@ def get_current_client(user: UserDTO = Depends(get_current_user)) -> UserDTO:
     
     return user
 
-@app.get("/users/me", response_model=UserDTO)
-async def read_users_me(
-    current_user: Annotated[UserDTO, Depends(get_current_user)]
-) -> UserDTO:
-    return current_user
+def get_curent_coach(user: UserDTO = Depends(get_current_user)) -> UserDTO:
+    if user.role != Role.COACH:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions. You are not a coach.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    
+    return user
+
 
 @app.get("/users/me/coach", response_model=UserDTO)
 async def read_current_coach(
