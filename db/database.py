@@ -403,7 +403,7 @@ class ClientService():
             
     async def unsubscribe_from_training(self, training_id: int) -> SubscriptionDTO:
         async with async_session_factory() as session:
-            subscription_exists = ORMBase.subscription_exists(session=session, user_id=self.user.id, training_id=training_id)
+            subscription_exists = await ORMBase.subscription_exists(session=session, user_id=self.user.id, training_id=training_id)
             
             if not subscription_exists:
                 raise ValueError(f"Training with id={training_id} was not found in your subscriptions")
@@ -423,6 +423,16 @@ class ClientService():
             )
 
             await session.execute(query)
+            available_training_insert_stmt = pg_insert(
+                AvailableTraining
+            ).values(
+                user_id = self.user.id,
+                training_id = training_id
+            ).on_conflict_do_nothing(
+                index_elements=["user_id", "training_id"]
+            )
+
+            await session.execute(available_training_insert_stmt)
             await session.commit()
 
             return subscription_dto
