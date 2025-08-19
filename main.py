@@ -11,9 +11,11 @@ from dotenv import load_dotenv
 from app.routers.auth import get_current_user, router as auth_router
 from app.routers.client import router as client_router
 from app.routers.coach import router as coach_router
+from app.routers.registration import router as registration_router
 
 app = FastAPI()
 
+app.include_router(registration_router)
 app.include_router(auth_router)
 app.include_router(client_router)
 app.include_router(coach_router)

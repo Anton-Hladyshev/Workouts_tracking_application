@@ -682,7 +682,7 @@ class RegistrationService():
             
             hashed_password = ph.hash(self.new_user_dto.password)
 
-            age =  self.calculate_age()
+            age = self.calculate_age()
 
             user_add_dto = UserAddDTO(
                 name=self.new_user_dto.name,
@@ -693,6 +693,8 @@ class RegistrationService():
                 gender=self.new_user_dto.gender
             )
 
-            ORMBase.register_new_user(user=user_add_dto, session=session)
+            await ORMBase.register_new_user(user=user_add_dto, session=session)
+
+            await session.commit()
 
             return user_add_dto

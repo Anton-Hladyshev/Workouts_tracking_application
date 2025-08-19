@@ -39,7 +39,7 @@ class UserDTO(UserAddDTO):
 
 class UserRegisterDTO(BaseModel):
     name: str = Field(default="Your name")
-    email: str = EmailStr
+    email: EmailStr
     password: str
     password_confirmation: str
     role: Role = Field(description="Specify your role: a coach or a student")
@@ -51,6 +51,7 @@ class UserRegisterDTO(BaseModel):
     def verify_passwords_matching(self):
         if self.password != self.password_confirmation:
             raise RegistrationError("Passwords must match")
+        return self
 
 class TrainingOnInputDTO(BaseModel):
     title: str = Field(default="New training", description="A title of a new training")
