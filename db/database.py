@@ -16,6 +16,7 @@ from app.config import settings
 from models.models import Auditory, Gender, User, Training, TrainingType, Discipline, Subscription, AvailableTraining
 from datetime import date, datetime, time
 from schemas.schemas import *
+from argon2 import PasswordHasher
 
 async_engine = create_async_engine(
     url=settings.get_db_url_with_asyncpg, 
@@ -23,6 +24,8 @@ async_engine = create_async_engine(
     pool_size=5,
     max_overflow=10
 )
+
+ph = PasswordHasher()
 
 async_session_factory = async_sessionmaker(bind=async_engine)
 
@@ -652,4 +655,44 @@ class CoachService():
 
     def get_user(self) -> UserDTO:
         return self.user
+
+class RegistrationService():
+    def __init__(self, new_user_dto: UserRegisterDTO):
+        self.new_user_dto = new_user_dto
+
+    def calculate_age(self) -> int:
+        age = datetime.today().year - self.new_user_dto.birth_date.year
+
+        if (datetime.today().month, datetime.today().day) < (self.new_user_dto.birth_date.month, self.new_user_dto.birth_date.day):
+            age -= 1
+        
+        return age 
+
+    async def add_new_user(self) -> UserAddDTO | None:
+        async with async_session_factory() as session:
+            all_emails_query = select(
+                User.email
+            )
+
+            all_emails = await session.execute(all_emails_query)
+            all_emails = all_emails.scalars().all()
+
+            if self.new_user_dto.email in all_emails:
+                raise RegistrationError("The email you have entered is already used", 409)
             
+            hashed_password = ph.hash(self.new_user_dto.password)
+
+            age =  self.calculate_age()
+
+            user_add_dto = UserAddDTO(
+                name=self.new_user_dto.name,
+                email=self.new_user_dto.email,
+                password=hashed_password,
+                role=self.new_user_dto.role,
+                age=age,
+                gender=self.new_user_dto.gender
+            )
+
+            ORMBase.register_new_user(user=user_add_dto, session=session)
+
+            return user_add_dto

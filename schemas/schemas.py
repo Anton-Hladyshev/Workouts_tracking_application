@@ -1,9 +1,9 @@
-from pydantic import BaseModel, model_validator, field_validator, Field
-from models.enums import Auditory, Discipline, Gender, TrainingType
+from pydantic import BaseModel, EmailStr, model_validator, field_validator, Field
+from models.enums import Auditory, Discipline, Gender, Role, TrainingType, UserType
 from typing import List, Optional
 from datetime import datetime, timedelta, time, date as _date
 
-from schemas.exceptions import TimeValidationError, BusinessRulesValidationError
+from schemas.exceptions import RegistrationError, TimeValidationError, BusinessRulesValidationError
 
 class UserAddDTO(BaseModel):
     name: str
@@ -36,6 +36,21 @@ class UserAddDTO(BaseModel):
 
 class UserDTO(UserAddDTO):
     id: int
+
+class UserRegisterDTO(BaseModel):
+    name: str = Field(default="Your name")
+    email: str = EmailStr
+    password: str
+    password_confirmation: str
+    role: Role = Field(description="Specify your role: a coach or a student")
+    birth_date: _date = Field(description="Your birthdate")
+    gender: Gender = Field(description="Your gender")
+    level: UserType = Field(description="Your level")
+
+    @model_validator(mode="after")
+    def verify_passwords_matching(self):
+        if self.password != self.password_confirmation:
+            raise RegistrationError("Passwords must match")
 
 class TrainingOnInputDTO(BaseModel):
     title: str = Field(default="New training", description="A title of a new training")

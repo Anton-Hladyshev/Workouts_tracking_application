@@ -5,7 +5,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, status, Query, Reques
 from fastapi.responses import JSONResponse
 from models.enums import Auditory, Discipline, Gender, Role, TrainingType
 from schemas.schemas import SubscriptionDTO, TrainingOnInputDTO, TrainingAddDTO, TrainingDTO, TrainingOnInputToUpdateDTO, TrainingSearchDTO, UserDTO
-from schemas.exceptions import InvalidPermissionsError, TimeValidationError, BusinessRulesValidationError
+from schemas.exceptions import InvalidPermissionsError, RegistrationError, TimeValidationError, BusinessRulesValidationError
 from db.database import ClientService, CoachService, async_session_factory
 from dotenv import load_dotenv
 from app.routers.auth import get_current_user, router as auth_router
@@ -37,11 +37,19 @@ async def permissions_validation_exception_handler(request: Request, exc: TimeVa
         }
     )
 
-
 @app.exception_handler(BusinessRulesValidationError)
 async def business_logic_validation_exception_handler(request: Request, exc: BusinessRulesValidationError):
     return JSONResponse(
         status_code=422,
+        content={
+            "detail": exc.message
+        }
+    )
+
+@app.exception_handler(RegistrationError)
+async def registration_exception_handler(request: Request, exc: RegistrationError):
+    return JSONResponse(
+        status_code=exc.code,
         content={
             "detail": exc.message
         }
