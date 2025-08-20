@@ -3,13 +3,12 @@ import os
 from typing import Annotated
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import APIRouter, Depends, HTTPException, Body, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Body, Depends, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import jwt
-from pydantic import BaseModel
-from db.database import ORMBase, ClientService, CoachService, async_session_factory
+from db.database import ORMBase, async_session_factory
 from dotenv import load_dotenv
-from schemas.schemas import UserDTO
+from schemas.schemas import AccessToken, TokenData, UserDTO, UserLoginDTO
 
 load_dotenv()
 
@@ -26,13 +25,6 @@ ph = PasswordHasher()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
-class AccessToken(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    username: str | None = None
-
 def verify_password(hashed_password: str, plain_password: str) -> bool:
     """Verify if the provided password matches the hashed password."""
     is_correct = True
@@ -46,22 +38,22 @@ def get_password_hash(password: str) -> str:
     """Hash the provided password using Argon2."""
     return ph.hash(password)
 
-async def get_user(username: str) -> UserDTO | None:
-    """Retrieve a user by username from the database."""
+async def get_user(identifier: str) -> UserDTO | None:
+    """Retrieve a user by identifier from the database."""
     async with async_session_factory() as session:
         params = {
-            "name": username
+            "email": identifier
         }
-        user = await ORMBase.get_user_by(ession=session, **params)
+        user = await ORMBase.get_user_by(session=session, **params)
         
         return user
     
-async def authenticate_user(username: str, password: str) -> UserDTO | bool:
-    """Authenticate a user by verifying the username and password."""
-    user = await get_user(username)
+async def authenticate_user(login_form: UserLoginDTO) -> UserDTO | bool:
+    """Authenticate a user by verifying the identifier and password."""
+    user = await get_user(login_form.email)
     if not user:
         return False
-    if not verify_password(user.password, password):
+    if not verify_password(user.password, login_form.password):
         return False
     return user
     
@@ -80,38 +72,71 @@ def create_access_token(
     return encoded_jwt
 
 async def get_current_user(
+        request: Request,
         token: Annotated[str, Depends(oauth2_scheme)]
 ) -> UserDTO:
     """Get the current user from the JWT token."""
-    creditials_exception = HTTPException(
+    credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"}
     )
+    if token is None:
+        token = request.cookies.get("access_token")
+
+    if not token:
+        raise credentials_exception
 
     try:
         payload = jwt.decode(token, jwt_key, algorithms=[jwt_alghorithm])
-        username = payload.get("sub")
-        if username is None:
-            raise creditials_exception
-        token_data = TokenData(username=username)
+        identifier = payload.get("sub")
+        if identifier is None:
+            raise credentials_exception
+        
+        token_data = TokenData(identifier=identifier)
     except jwt.InvalidTokenError:
-        raise creditials_exception
-    user = await get_user(username=token_data.username)
+        raise credentials_exception
+    user = await get_user(identifier=token_data.identifier)
     if not user:
-        raise creditials_exception
+        raise credentials_exception
     return user
 
 
 @router.post('/token')
 async def login_for_access_token(
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> AccessToken:
-    user = await authenticate_user(form_data.username, form_data.password)
+    user = await authenticate_user(login_form=UserLoginDTO(
+        email=form_data.username,
+        password=form_data.password
+    ))
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect identifier or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    access_token_expires = timedelta(minutes=jwt_expire_delta)
+    access_token = create_access_token(
+        data={"sub":user.email},
+        expires_delta=access_token_expires
+    )
+
+    return AccessToken(
+        access_token=access_token,
+        token_type="bearer"
+    )
+
+@router.post("/login-cookie", status_code=status.HTTP_204_NO_CONTENT)
+async def login_with_cookie(
+    response: Response,
+    form_data: UserLoginDTO = Body()
+) -> None:
+    user = await authenticate_user(login_form=form_data)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect identifier or password",
             headers={"WWW-Authenticate": "Bearer"}
         )
     access_token_expires = timedelta(minutes=jwt_expire_delta)
@@ -120,10 +145,22 @@ async def login_for_access_token(
         expires_delta=access_token_expires
     )
 
-    return AccessToken(
-        access_token=access_token,
-        token_type="bearer"
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=access_token_expires * 60,
+        secure=True,
+        path="/",
+        samesite="lax",
+        httponly=True
     )
+
+    return 
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response) -> None:
+    response.delete_cookie(key="access_token", path="/")
+    return 
 
 @router.get("/users/me", response_model=UserDTO)
 async def read_users_me(

@@ -52,6 +52,23 @@ class UserRegisterDTO(BaseModel):
         if self.password != self.password_confirmation:
             raise RegistrationError("Passwords must match")
         return self
+    
+class UserLoginDTO(BaseModel):
+    email: EmailStr
+    password: str
+
+    @model_validator(mode="after")
+    def verify_email_format(self):
+        if not self.email or "@" not in self.email:
+            raise RegistrationError("Email must be a valid email address")
+        return self
+    
+class AccessToken(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    identifier: str | None = None
 
 class TrainingOnInputDTO(BaseModel):
     title: str = Field(default="New training", description="A title of a new training")
