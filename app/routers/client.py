@@ -54,7 +54,7 @@ async def read_own_available_trainings(
         )
     return available_trainings
 
-@router.post("/users/me/client/subscribe/", response_model=SubscriptionDTO)
+@router.post("/users/me/client/available_trainings/subscribe/", response_model=SubscriptionDTO)
 async def subscribe_to_trainig(
     training_id: int,
     current_user: Annotated[UserDTO, Depends(get_current_client)]
@@ -73,7 +73,7 @@ async def subscribe_to_trainig(
             headers={"WWW-Authenticate": "Bearer"}
         )
     
-@router.delete("/users/me/client/unsubscribe", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/users/me/client/subscriptions/unsubscribe", status_code=status.HTTP_204_NO_CONTENT)
 async def unsubscribe_from_training(
     training_id: int,
     current_user: Annotated[UserDTO, Depends(get_current_client)]

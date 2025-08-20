@@ -29,7 +29,7 @@ async def read_current_coach(
     service = CoachService(current_user)
     return service.get_user()
 
-@router.get("/users/me/coach/training/get", status_code=status.HTTP_200_OK, response_model=List[TrainingDTO])
+@router.get("/users/me/coach/trainings/get", status_code=status.HTTP_200_OK, response_model=List[TrainingDTO])
 async def get_trainings_by_parameters(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)],
     title: str | None = None,
@@ -62,8 +62,30 @@ async def get_trainings_by_parameters(
     result = await service.get_trainings(training_dto)
     return result
 
+@router.get('/users/me/coach/trainings/get_students_on_training/{training_id}', status_code=status.HTTP_200_OK, response_model=List[UserDTO])
+async def get_students_on_training(
+    training_id: int,
+    current_user: Annotated[UserDTO, Depends(get_curent_coach)]
+) -> List[UserDTO]:
+    service = CoachService(current_user)
+    try:
+        students = await service.get_students_of_training(training_id=training_id)
+        if len(students) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="There are no students on this training.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        
+        return students
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="There is not any training with this ID.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
-@router.post("/users/me/coach/training/create", status_code=status.HTTP_201_CREATED)
+@router.post("/users/me/coach/trainings/create", status_code=status.HTTP_201_CREATED)
 async def create_training(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)],
     training_data: TrainingOnInputDTO = Body()
@@ -95,7 +117,7 @@ async def create_training(
         }
     }
 
-@router.delete("/users/me/coach/training/delete/{training_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/users/me/coach/trainings/delete/{training_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_training(
     training_id: int,
     current_user: Annotated[UserDTO, Depends(get_curent_coach)]) -> None:
@@ -117,7 +139,7 @@ async def delete_training(
             headers={"WWW-Authenticate": "Bearer"}
         )
     
-@router.patch("/users/me/coach/training/update/{training_id}", status_code=status.HTTP_200_OK)
+@router.patch("/users/me/coach/trainings/update/{training_id}", status_code=status.HTTP_200_OK)
 async def update_training(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)],
     training_id: int,

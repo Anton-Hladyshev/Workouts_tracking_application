@@ -241,6 +241,7 @@ class ORMBase():
         filters = []
 
         filter_map = {
+            'id': Training.id,
             'title': Training.title,
             'time_start': Training.time_start,
             'time_end': Training.time_end,
@@ -634,6 +635,28 @@ class CoachService():
                 except Exception as ex:
                     await session.rollback()
                     raise ex
+                
+    async def get_students_of_training(self, training_id: int) -> List[UserDTO]:
+        async with async_session_factory() as session:
+            try:
+                training_exists = await ORMBase.training_exists(session=session, id=training_id)
+                if not training_exists:
+                    raise ValueError("Training not found")
+                query = select(
+                    Training
+                ).options(
+                    selectinload(Training.users_on_training)
+                ).where(
+                    Training.id == training_id
+                )
+
+                result = await session.execute(query)
+
+                return [UserDTO.model_validate(user, from_attributes=True) for user in result.scalar_one_or_none().users_on_training]
+            except Exception as ex:
+                await session.rollback()
+                raise ex
+
                 
     async def delete_training(self, training_id: int) -> None:
         async with async_session_factory() as session:
