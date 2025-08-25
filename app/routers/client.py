@@ -14,7 +14,7 @@ def get_current_client(user: UserDTO = Depends(get_current_user)) -> UserDTO:
     if user.role != Role.STUDENT:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. You are not a coach.",
+            detail="Not enough permissions. Client access only.",
             headers={"WWW-Authenticate": "Bearer"}
         )
     
