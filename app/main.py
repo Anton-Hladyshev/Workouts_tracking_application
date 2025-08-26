@@ -1,6 +1,4 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from schemas.exceptions import InvalidPermissionsError, RegistrationError, TimeValidationError, BusinessRulesValidationError
+from fastapi import FastAPI
 from app.routers.auth import router as auth_router
 from app.routers.client import router as client_router
 from app.routers.coach import router as coach_router

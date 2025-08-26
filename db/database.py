@@ -1,19 +1,17 @@
 import sys
 import pathlib
-from typing import Any, Dict, List, Sequence, Tuple
-
-from schemas.exceptions import InvalidPermissionsError
-
 
 root_path = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_path))
 
+from typing import Any, Dict, List, Sequence
+from schemas.exceptions import InvalidPermissionsError
 from sqlalchemy import delete, exists, select, and_, or_, cast, Date, Time
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import settings
-from models.models import Auditory, Gender, User, Training, TrainingType, Discipline, Subscription, AvailableTraining
+from models.models import User, Training, TrainingType, Subscription, AvailableTraining
 from datetime import date, datetime, time
 from schemas.schemas import *
 from argon2 import PasswordHasher
