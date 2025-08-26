@@ -6,6 +6,7 @@ from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Depends, HTTPException, Body, Depends, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import jwt
+from pydantic import ValidationError
 from db.database import ORMBase, async_session_factory
 from dotenv import load_dotenv
 from schemas.schemas import AccessToken, TokenData, UserDTO, UserLoginDTO
@@ -106,10 +107,20 @@ async def get_current_user(
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> AccessToken:
-    user = await authenticate_user(login_form=UserLoginDTO(
-        email=form_data.username,
-        password=form_data.password
-    ))
+    
+    try:
+        login_form = UserLoginDTO(
+            email=form_data.username,
+            password=form_data.password
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors()
+        )
+    
+    user = await authenticate_user(login_form=login_form)
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

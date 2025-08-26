@@ -56,12 +56,6 @@ class UserRegisterDTO(BaseModel):
 class UserLoginDTO(BaseModel):
     email: EmailStr
     password: str
-
-    @model_validator(mode="after")
-    def verify_email_format(self):
-        if not self.email or "@" not in self.email:
-            raise RegistrationError("Email must be a valid email address")
-        return self
     
 class AccessToken(BaseModel):
     access_token: str
