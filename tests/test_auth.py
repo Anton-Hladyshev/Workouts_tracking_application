@@ -1,8 +1,10 @@
 from httpx import AsyncClient
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 @pytest.mark.asyncio
-async def test_auth_user_bad_password(client: AsyncClient):
+@pytest.mark.auth_bad_password
+async def test_auth_user_bad_password(client: AsyncClient, db_session: AsyncSession):
     response = await client.post(
         "/auth/token",
         data={
@@ -14,7 +16,8 @@ async def test_auth_user_bad_password(client: AsyncClient):
     assert "access_token" not in response.json()
 
 @pytest.mark.asyncio
-async def test_auth_user_success(client: AsyncClient):
+@pytest.mark.auth_success
+async def test_auth_user_success(client: AsyncClient, db_session: AsyncSession):
     response = await client.post(
         "/auth/token",
         data={
@@ -26,7 +29,8 @@ async def test_auth_user_success(client: AsyncClient):
     assert "access_token" in response.json()
 
 @pytest.mark.asyncio
-async def test_auth_user_bad_email(client: AsyncClient):
+@pytest.mark.auth_bad_email
+async def test_auth_user_bad_email(client: AsyncClient, db_session: AsyncSession):
     response = await client.post(
         "/auth/token",
         data={
@@ -38,7 +42,8 @@ async def test_auth_user_bad_email(client: AsyncClient):
     assert "access_token" not in response.json()
 
 @pytest.mark.asyncio
-async def test_auth_user_empty_data(client: AsyncClient):
+@pytest.mark.auth_empty_data
+async def test_auth_user_empty_data(client: AsyncClient, db_session: AsyncSession):
     response = await client.post(
         "/auth/token",
         data={
@@ -50,7 +55,8 @@ async def test_auth_user_empty_data(client: AsyncClient):
     assert "access_token" not in response.json()
 
 @pytest.mark.asyncio
-async def test_auth_user_no_data(client: AsyncClient):
+@pytest.mark.auth_no_data
+async def test_auth_user_no_data(client: AsyncClient, db_session: AsyncSession):
     response = await client.post(
         "/auth/token",
         data={}
