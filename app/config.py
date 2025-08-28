@@ -12,12 +12,10 @@ class Settings(BaseSettings):
 
     DB_TEST_NAME: str | None = config.get("POSTGRES_TEST_DB", "club_db_test")
 
-    # DSN: postgresql+psycopg://admin:admin@localhost:5432/club_db
     @property # called as settings.db_url
     def get_db_url_with_psycopg(self) -> str:
         return f"postgresql+psycopg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
-    # DSN: postgresql+asyncpg://admin:admin@localhost:5432/club_db
     @property
     def get_db_url_with_asyncpg(self) -> str:
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
@@ -26,4 +24,4 @@ class Settings(BaseSettings):
     def get_db_url_with_asyncpg_test(self) -> str:
         return f"postgresql+asyncpg://{self.DB_USER}_test:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_TEST_NAME}"
     
-settings = Settings()
+settings = Settings() 
