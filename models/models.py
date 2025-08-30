@@ -55,6 +55,11 @@ class User(Base): # Model for user
         secondary="available_trainings"
     )
 
+    interests: Mapped[List["Interest"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
     __table_args__ = (
         Index("user_age_type_index", "age_type"),
         Index("user_gender_index", "gender")
@@ -80,6 +85,7 @@ class Training(Base): # Model for training
     time_end: Mapped[TrainingSchedule]
     target_auditory: Mapped[Auditory] = mapped_column(SQLAlchemyEnum(Auditory), nullable=True, default=None) # Target auditory for training, if None then it's for all
     target_gender: Mapped[Gender] = mapped_column(SQLAlchemyEnum(Gender), nullable=True, default=None) # Target gender for training, if None then it's for all
+    target_user_type: Mapped[UserType] = mapped_column(SQLAlchemyEnum(UserType), nullable=True, default=None) # Target user type for training, if None then it's for all
     type: Mapped[TrainingType]
     individual_for_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True) # Individual training for a specific user, if None then it's a group training
     discipline: Mapped[Discipline]
@@ -127,4 +133,19 @@ class AvailableTraining(Base): # Represents available training for a specific us
     __table_args__ = (
         Index("available_trainings_training_id_index", "training_id"),
         Index("available_trainings_user_id_index", "user_id")
+    )
+
+class Interest(Base): # Model for user interests
+    __tablename__ = 'interests'
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    discipline: Mapped[Discipline] = mapped_column(SQLAlchemyEnum(Discipline), primary_key=True)
+
+    user: Mapped["User"] = relationship(
+        back_populates="interests"
+    )
+
+    __table_args__ = (
+        Index("interest_user_id_index", "user_id"),
+        Index("interest_discipline_index", "discipline")
     )
