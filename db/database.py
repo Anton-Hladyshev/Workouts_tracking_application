@@ -578,7 +578,8 @@ class CoachService():
                 coach_id=training_data.coach_id,
                 individual_for_id=training_data.individual_for_id,
                 target_auditory=training_data.target_auditory,
-                target_gender=training_data.target_gender
+                target_gender=training_data.target_gender,
+                target_user_type=training_data.target_usertype
             )
 
             session.add(training)

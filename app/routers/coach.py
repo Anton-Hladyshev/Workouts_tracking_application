@@ -105,7 +105,8 @@ async def create_training(
         coach_id=current_user.id,
         individual_for_id=training_dict.get("individual_for_id"),
         target_auditory=training_dict.get("target_auditory"),
-        target_gender=training_dict.get("target_gender")
+        target_gender=training_dict.get("target_gender"),
+        target_usertype=training_dict.get("target_usertype")
     )
     new_training = await service.create_training(training_data=training_dto)
     return {

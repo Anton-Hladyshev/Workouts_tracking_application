@@ -68,6 +68,7 @@ class TrainingOnInputDTO(BaseModel):
     individual_for_id: Optional[int] = Field(default=None, description="Id of a person for whom this training is dedicated. Should be specified only if the type is 'individual'")
     target_auditory: Optional[Auditory] = Field(default=None, example="adults", description="For clients of which specific age group this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all age groups")  # e.g., "adults", "children"
     target_gender: Optional[Gender] = Field(default=None, example="men", description="For clients of which specific gender this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all genders")
+    target_usertype: Optional[UserType] = Field(default=None, description="For clients of which specific user type this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all user types")
 
     @field_validator("date", mode="before")
     def validate_date(cls, v):
@@ -95,16 +96,12 @@ class TrainingOnInputDTO(BaseModel):
                 raise TimeValidationError("The time of the end of a training should be grater then the time of the start of the training")
         
         #check business rules
-        type_ = self.type
-        individual_for_id = self.individual_for_id
-        target_auditory = self.target_auditory
-        target_gender = self.target_gender
 
-        if type_ == TrainingType.INDIVIDUAL and not individual_for_id:
+        if self.type == TrainingType.INDIVIDUAL and not self.individual_for_id:
             raise BusinessRulesValidationError("Individual training must have an id of a specific student")
-        if type_ == TrainingType.INDIVIDUAL and (target_auditory or target_gender):
+        if self.type == TrainingType.INDIVIDUAL and (self.target_auditory or self.target_gender or self.target_usertype):
             raise BusinessRulesValidationError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
-        if type_ == TrainingType.GROUP and individual_for_id:
+        if self.type == TrainingType.GROUP and self.individual_for_id:
             raise BusinessRulesValidationError("Group training cannot have an id of a specific student")
         
         return self
@@ -121,6 +118,7 @@ class TrainingOnInputToUpdateDTO(TrainingOnInputDTO):
     individual_for_id: Optional[int] = None
     target_auditory: Optional[Auditory] = Field(default=None, example="adults")  # e.g., "adults", "children"
     target_gender: Optional[Gender] = Field(default=None, example="men")
+    target_usertype: Optional[UserType] = None
 
 class TrainingSearchDTO(BaseModel):
     title: Optional[str] = Field(default=None, description="A title of a new training")
@@ -134,6 +132,7 @@ class TrainingSearchDTO(BaseModel):
     individual_for_id: Optional[int] = Field(default=None, description="Id of a person for whom this training is dedicated. Should be specified only if the type is 'individual'")
     target_auditory: Optional[Auditory] = Field(default=None, example="adults", description="For clients of which specific age group this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all age groups")  # e.g., "adults", "children"
     target_gender: Optional[Gender] = Field(default=None, example="men", description="For clients of which specific gender this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all genders")
+    target_usertype: Optional[UserType] = Field(default=None, description="For clients of which specific user type this training is dedicated. Shold be specified if type is 'grpoup'. If not specified, training is dedicated for all user types")
 
     @field_validator("date_start_search", "date_end_search", mode="before")
     def validate_date(cls, v):
@@ -175,14 +174,9 @@ class TrainingSearchDTO(BaseModel):
                 raise TimeValidationError("The date of the end of a search period should be grater then the date of the start of the search period")
         
         #check business rules
-        type_ = self.type
-        individual_for_id = self.individual_for_id
-        target_auditory = self.target_auditory
-        target_gender = self.target_gender
-
-        if type_ == TrainingType.INDIVIDUAL and (target_auditory or target_gender):
+        if self.type == TrainingType.INDIVIDUAL and (self.target_auditory or self.target_gender or self.target_usertype):
             raise BusinessRulesValidationError("An individual traoining can not have a target auditory or target gender. It is for a specific user specified by individual_for_id")
-        if type_ == TrainingType.GROUP and individual_for_id:
+        if self.type == TrainingType.GROUP and self.individual_for_id:
             raise BusinessRulesValidationError("Group training cannot have an id of a specific student")
         
         return self
@@ -198,6 +192,7 @@ class TrainingAddDTO(BaseModel):
     individual_for_id: Optional[int] = None
     target_auditory: Optional[Auditory] = None  # e.g., "adults", "children"
     target_gender: Optional[Gender] = None
+    target_usertype: Optional[UserType] = None
 
 
 class TrainingDTO(TrainingAddDTO):
