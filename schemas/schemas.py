@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, Field
 from models.enums import Auditory, Discipline, Gender, Role, TrainingType, UserType
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime, timedelta, time, date as _date
 
 from schemas.exceptions import RegistrationError, TimeValidationError, BusinessRulesValidationError
@@ -12,27 +12,19 @@ class UserAddDTO(BaseModel):
     role: str
     age: int
     gender: Gender
-    age_type: Auditory = None
+    age_type: Auditory | None = None
 
-    @model_validator(mode="before")
-    def validate_age_type(cls, values) -> dict:
-        if isinstance(values, dict):
-            age = values.get("age")
-            age_type = values.get("age_type")
-
-        else:
-            age = values.age
-            age_type = values.age_type
-
-        if age_type is None:
-            if age < 14:
-                age = Auditory.CHILDREN
-            elif age < 60:
-                age_type = Auditory.ADULTS
+    @model_validator(mode="after")
+    def validate_age_type(self) -> dict:
+        if self.age_type is None:
+            if self.age < 14:
+                self.age_type = Auditory.CHILDREN
+            elif self.age < 60:
+                self.age_type = Auditory.ADULTS
             else:
-                age_type = Auditory.SENIORS
+                self.age_type = Auditory.SENIORS
 
-        return values
+        return self
 
 class UserDTO(UserAddDTO):
     id: int

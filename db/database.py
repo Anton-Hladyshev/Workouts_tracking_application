@@ -718,8 +718,8 @@ class RegistrationService():
                 gender=self.new_user_dto.gender
             )
 
-            #await ORMBase.register_new_user(user=user_add_dto, session=session)
+            await ORMBase.register_new_user(user=user_add_dto, session=session)
 
-            #await session.commit()
+            await session.commit()
 
             return user_add_dto
