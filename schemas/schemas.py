@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, model_validator, field_validator, Field
 from models.enums import Auditory, Discipline, Gender, Role, TrainingType, UserType
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime, timedelta, time, date as _date
 
 from schemas.exceptions import RegistrationError, TimeValidationError, BusinessRulesValidationError
@@ -38,6 +38,7 @@ class UserRegisterDTO(BaseModel):
     birth_date: _date = Field(description="Your birthdate")
     gender: Gender = Field(description="Your gender")
     level: UserType = Field(description="Your level")
+    interests: List[Discipline] = Field(default_factory=list, description="Your interests")
 
     @model_validator(mode="after")
     def verify_passwords_matching(self):
@@ -218,3 +219,7 @@ class WorkloadOfEachCoachDTO(BaseModel):
 class SubscriptionDTO(BaseModel):
     user_id: int
     training_id: int
+
+class InterestDTO(BaseModel):
+    user_id: int
+    disipline: Discipline

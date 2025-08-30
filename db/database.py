@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import settings
-from models.models import User, Training, TrainingType, Subscription, AvailableTraining
+from models.models import Interest, User, Training, TrainingType, Subscription, AvailableTraining
 from datetime import date, datetime, time
 from schemas.schemas import *
 from argon2 import PasswordHasher
@@ -460,6 +460,24 @@ class ClientService():
             result = await session.execute(query)
             return result.scalar()
 
+    async def get_my_interests(self, session: AsyncSession | None = None) -> List[Discipline]:
+        query = select(
+                User
+            ).options(
+                selectinload(User.interests)
+            ).where(
+                User.id == self.user.id
+            )
+        if session is None:
+            async with async_session_factory() as session:
+                result = await session.execute(query)
+                user = result.scalar_one_or_none()
+                return user.interests if user else []
+            
+        else:
+            result = await session.execute(query)
+            user = result.scalar_one_or_none()
+            return user.interests if user else []
 
     def get_user(self) -> UserDTO:
         return self.user
@@ -691,7 +709,7 @@ class RegistrationService():
         if (datetime.today().month, datetime.today().day) < (self.new_user_dto.birth_date.month, self.new_user_dto.birth_date.day):
             age -= 1
         
-        return age 
+        return age    
 
     async def add_new_user(self) -> UserAddDTO | None:
         async with async_session_factory() as session:
@@ -718,7 +736,21 @@ class RegistrationService():
                 gender=self.new_user_dto.gender
             )
 
-            await ORMBase.register_new_user(user=user_add_dto, session=session)
+            user = User.from_dto(user_add_dto)
+            session.add(user)
+
+            await session.flush()
+
+            interests = []
+
+            for i in self.new_user_dto.interests:
+                interest = Interest(
+                    discipline=i,
+                    user_id=user.id
+                )
+                interests.append(interest)
+
+            session.add_all(interests)
 
             await session.commit()
 
