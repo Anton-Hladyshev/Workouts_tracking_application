@@ -129,14 +129,18 @@ class ORMBase():
             return [UserDTO.model_validate(user, from_attributes=True) for user in result.scalars().all()]
         
     @staticmethod
-    async def user_exists(name: str, email: str) -> bool:
-        async with async_session_factory() as session:
-            query = select(
+    async def user_exists(name: str, email: str, session: AsyncSession | None = None) -> bool:
+        query = select(
                 exists().where(
                     (User.name == name) | (User.email == email)
                 )
             )
-
+        
+        if session is None:
+            async with async_session_factory() as async_session:
+                result = await async_session.execute(query)
+                return result.scalar()
+        else:
             result = await session.execute(query)
             return result.scalar()
         
@@ -693,7 +697,7 @@ class RegistrationService():
         async with async_session_factory() as session:
             all_emails_query = select(
                 User.email
-            )
+            ).distinct()
 
             all_emails = await session.execute(all_emails_query)
             all_emails = all_emails.scalars().all()
@@ -714,8 +718,8 @@ class RegistrationService():
                 gender=self.new_user_dto.gender
             )
 
-            await ORMBase.register_new_user(user=user_add_dto, session=session)
+            #await ORMBase.register_new_user(user=user_add_dto, session=session)
 
-            await session.commit()
+            #await session.commit()
 
             return user_add_dto

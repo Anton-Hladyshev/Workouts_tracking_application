@@ -8,23 +8,25 @@ from models.models import Base
 import logging
 from app.main import app
 from schemas.schemas import UserAddDTO
+from sqlalchemy.ext.asyncio import AsyncSession
+from faker import Faker
 # make a fixture to create the test database, insert some test data, and drop the database after tests are done
 
 logging.basicConfig(level=logging.DEBUG)
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def engine():
     async_engine = create_async_engine(
         settings.get_db_url_with_asyncpg_test, 
         echo=True,
-        pool_size=10
+        pool_size=5
     )
 
     logging.debug("Creating test database...")
 
     try:
         async with async_engine.begin() as conn:
-             # Завершаем текущую транзакцию
+            # Drop all existing tables and create new ones
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
@@ -43,7 +45,7 @@ async def engine():
             logging.debug("Inserted test data into the database.")
         
     except Exception as e:
-        logging.error(f"Error creating test tables: {e}")
+        logging.error(f"Error during creating test tables: {e}")
         raise
 
     yield async_engine
@@ -62,10 +64,23 @@ async def db_session(engine):
     async with async_session() as session:
         yield session
 
-        await session.rollback()
 
 @pytest_asyncio.fixture(scope="function")
 async def client():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     logging.debug("Closing AsyncClient...")
+
+
+@pytest.fixture(scope="function")
+def test_user_data():
+    fake = Faker()
+    return {
+        "name": fake.name(),
+        "email": fake.email(),
+        "password": fake.password(length=12),
+        "role": fake.random_element(elements=("coach", "student")),
+        "age": fake.random_int(min=18, max=60),
+        "gender": fake.random_element(elements=("men", "woman")),
+        "level": fake.random_element(elements=("beginner", "competitor", "non_competitor"))
+    }
