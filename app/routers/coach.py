@@ -97,7 +97,7 @@ async def create_training(
 
     training_dto = TrainingAddDTO(
         title=training_dict.get("title"),
-        description=training_dict.get("title"),
+        description=training_dict.get("description"),
         time_start=date_time_start,
         time_end=date_time_end,
         type=TrainingType(training_dict.get("type")),
