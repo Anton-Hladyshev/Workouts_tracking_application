@@ -3,8 +3,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 import pytest
 
-from db.database import ORMBase
-
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'

@@ -6,9 +6,10 @@ sys.path.insert(0, str(root_path))
 
 from typing import Any, Dict, List, Sequence
 from schemas.exceptions import InvalidPermissionsError
-from sqlalchemy import delete, exists, select, and_, or_, cast, Date, Time
+from sqlalchemy import delete, exists, select, and_, or_, cast, Date, Time, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import settings
 from models.models import Interest, User, Training, TrainingType, Subscription, AvailableTraining
@@ -507,11 +508,10 @@ class CoachService():
                 "target_gender": User.gender,
                 "target_usertype": User.user_type
             }
-
-            for key, value in training.model_dump(exclude_none=True).items():
+            training_dict = training.model_dump(exclude_none=True)
+            for key, value in training_dict.items():
                 if key in filter_map:
                     filters.append(filter_map[key] == value)
-
             query = select(
                 User.id
             ).join(
@@ -530,6 +530,7 @@ class CoachService():
 
             data.extend([{"user_id": uid, "training_id": training.id} for uid in user_ids])
 
+        #return query.compile(dialect=postgresql.dialect()).string
         return data
 
     async def get_trainings(self, training_data: TrainingSearchDTO) -> List[TrainingDTO]:
@@ -592,13 +593,13 @@ class CoachService():
                 individual_for_id=training_data.individual_for_id,
                 target_auditory=training_data.target_auditory,
                 target_gender=training_data.target_gender,
-                target_user_type=training_data.target_usertype
+                target_usertype=training_data.target_usertype
             )
 
             session.add(training)
             await session.flush()
 
-            target_users_data = await self.calculate_target_users(session, TrainingDTO.model_validate(training, from_attributes=True))
+            target_users_data = await CoachService.calculate_target_users(session, TrainingDTO.model_validate(training, from_attributes=True))
                     
             if target_users_data:
                 stmt = pg_insert(AvailableTraining).values(target_users_data).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
@@ -624,7 +625,7 @@ class CoachService():
                         "type": training.type,
                         "target_auditory": training.target_auditory,
                         "target_gender": training.target_gender,
-                        "target_user_type": training.target_user_type,
+                        "target_usertype": training.target_usertype,
                         "discipline": training.discipline
                     }
 
@@ -649,7 +650,7 @@ class CoachService():
                             and training_dto.target_auditory == filter_params["target_auditory"] 
                             and training_dto.target_gender == filter_params["target_gender"] 
                             and training_dto.discipline == filter_params["discipline"] 
-                            and training_dto.target_usertype == filter_params["target_user_type"]):
+                            and training_dto.target_usertype == filter_params["target_usertype"]):
                         data_target_users = []
 
                         # delete old target users for this training
