@@ -97,7 +97,7 @@ async def create_training(
 
     training_dto = TrainingAddDTO(
         title=training_dict.get("title"),
-        description=training_dict.get("title"),
+        description=training_dict.get("description"),
         time_start=date_time_start,
         time_end=date_time_end,
         type=TrainingType(training_dict.get("type")),
@@ -105,7 +105,8 @@ async def create_training(
         coach_id=current_user.id,
         individual_for_id=training_dict.get("individual_for_id"),
         target_auditory=training_dict.get("target_auditory"),
-        target_gender=training_dict.get("target_gender")
+        target_gender=training_dict.get("target_gender"),
+        target_usertype=training_dict.get("target_usertype")
     )
     new_training = await service.create_training(training_data=training_dto)
     return {

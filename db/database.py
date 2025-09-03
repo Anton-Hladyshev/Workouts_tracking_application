@@ -6,12 +6,13 @@ sys.path.insert(0, str(root_path))
 
 from typing import Any, Dict, List, Sequence
 from schemas.exceptions import InvalidPermissionsError
-from sqlalchemy import delete, exists, select, and_, or_, cast, Date, Time
+from sqlalchemy import delete, exists, select, and_, or_, cast, Date, Time, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.config import settings
-from models.models import User, Training, TrainingType, Subscription, AvailableTraining
+from models.models import Interest, User, Training, TrainingType, Subscription, AvailableTraining
 from datetime import date, datetime, time
 from schemas.schemas import *
 from argon2 import PasswordHasher
@@ -460,6 +461,24 @@ class ClientService():
             result = await session.execute(query)
             return result.scalar()
 
+    async def get_my_interests(self, session: AsyncSession | None = None) -> List[Discipline]:
+        query = select(
+                User
+            ).options(
+                selectinload(User.interests)
+            ).where(
+                User.id == self.user.id
+            )
+        if session is None:
+            async with async_session_factory() as session:
+                result = await session.execute(query)
+                user = result.scalar_one_or_none()
+                return user.interests if user else []
+            
+        else:
+            result = await session.execute(query)
+            user = result.scalar_one_or_none()
+            return user.interests if user else []
 
     def get_user(self) -> UserDTO:
         return self.user
@@ -471,7 +490,7 @@ class CoachService():
         self.user = user
 
     @staticmethod
-    async def calculate_target_users(session: AsyncSession, training: TrainingDTO) -> Dict[str, int]:
+    async def calculate_target_users(session: AsyncSession, training: TrainingDTO) -> List[Dict[str, int]]:
         data = []
 
         # Case of individual training
@@ -483,13 +502,26 @@ class CoachService():
                 
         # Case of group training
         else:
+            filters = []
+            filter_map = {
+                "target_auditory": User.age_type,
+                "target_gender": User.gender,
+                "target_usertype": User.user_type
+            }
+            training_dict = training.model_dump(exclude_none=True)
+            for key, value in training_dict.items():
+                if key in filter_map:
+                    filters.append(filter_map[key] == value)
             query = select(
                 User.id
+            ).join(
+                Interest, Interest.user_id == User.id
             ).where(
-                or_(training.target_auditory is None, 
-                    training.target_auditory == User.age_type,),
-                or_(training.target_gender is None, 
-                    training.target_gender == User.gender)
+                and_(
+                    User.role == Role.STUDENT,
+                    Interest.discipline == training.discipline,
+                    *filters
+                )
             )
 
             result_query = await session.execute(query)
@@ -498,6 +530,7 @@ class CoachService():
 
             data.extend([{"user_id": uid, "training_id": training.id} for uid in user_ids])
 
+        #return query.compile(dialect=postgresql.dialect()).string
         return data
 
     async def get_trainings(self, training_data: TrainingSearchDTO) -> List[TrainingDTO]:
@@ -546,7 +579,6 @@ class CoachService():
 
             return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
 
-
     async def create_training(self, training_data: TrainingAddDTO) -> TrainingAddDTO:
         async with async_session_factory() as session:
 
@@ -560,13 +592,14 @@ class CoachService():
                 coach_id=training_data.coach_id,
                 individual_for_id=training_data.individual_for_id,
                 target_auditory=training_data.target_auditory,
-                target_gender=training_data.target_gender
+                target_gender=training_data.target_gender,
+                target_usertype=training_data.target_usertype
             )
 
             session.add(training)
             await session.flush()
 
-            target_users_data = await self.calculate_target_users(session, training)
+            target_users_data = await CoachService.calculate_target_users(session, TrainingDTO.model_validate(training, from_attributes=True))
                     
             if target_users_data:
                 stmt = pg_insert(AvailableTraining).values(target_users_data).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
@@ -574,7 +607,6 @@ class CoachService():
             await session.commit()
 
             return training_data
-
             
     async def update_training(self, training_id: int, **kwargs: Dict[str, Any]) -> TrainingDTO:
             async with async_session_factory() as session:
@@ -592,7 +624,9 @@ class CoachService():
                     filter_params = {
                         "type": training.type,
                         "target_auditory": training.target_auditory,
-                        "target_gender": training.target_gender
+                        "target_gender": training.target_gender,
+                        "target_usertype": training.target_usertype,
+                        "discipline": training.discipline
                     }
 
                     updated_date = kwargs.get("date", training.time_start.date())
@@ -611,8 +645,12 @@ class CoachService():
 
                     training_dto = TrainingDTO.model_validate(training, from_attributes=True)
 
-                    #if the training type or target auditory, or target gender has changed, we need to recalculate the target users
-                    if not (training_dto.type == filter_params["type"] and training_dto.target_auditory == filter_params["target_auditory"] and training_dto.target_gender == filter_params["target_gender"]):
+                    #if one fo target params has changed, we need to recalculate the target users
+                    if not (training_dto.type == filter_params["type"] 
+                            and training_dto.target_auditory == filter_params["target_auditory"] 
+                            and training_dto.target_gender == filter_params["target_gender"] 
+                            and training_dto.discipline == filter_params["discipline"] 
+                            and training_dto.target_usertype == filter_params["target_usertype"]):
                         data_target_users = []
 
                         # delete old target users for this training
@@ -658,7 +696,6 @@ class CoachService():
             except Exception as ex:
                 await session.rollback()
                 raise ex
-
                 
     async def delete_training(self, training_id: int) -> None:
         async with async_session_factory() as session:
@@ -677,9 +714,9 @@ class CoachService():
                 await session.rollback()
                 raise ex
             
-
     def get_user(self) -> UserDTO:
         return self.user
+
 
 class RegistrationService():
     def __init__(self, new_user_dto: UserRegisterDTO):
@@ -691,7 +728,7 @@ class RegistrationService():
         if (datetime.today().month, datetime.today().day) < (self.new_user_dto.birth_date.month, self.new_user_dto.birth_date.day):
             age -= 1
         
-        return age 
+        return age    
 
     async def add_new_user(self) -> UserAddDTO | None:
         async with async_session_factory() as session:
@@ -718,7 +755,21 @@ class RegistrationService():
                 gender=self.new_user_dto.gender
             )
 
-            await ORMBase.register_new_user(user=user_add_dto, session=session)
+            user = User.from_dto(user_add_dto)
+            session.add(user)
+
+            await session.flush()
+
+            interests = []
+
+            for i in self.new_user_dto.interests:
+                interest = Interest(
+                    discipline=i,
+                    user_id=user.id
+                )
+                interests.append(interest)
+
+            session.add_all(interests)
 
             await session.commit()
 
