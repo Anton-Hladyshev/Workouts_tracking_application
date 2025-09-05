@@ -729,6 +729,28 @@ class RegistrationService():
             age -= 1
         
         return age    
+    
+    @staticmethod
+    async def calculate_and_insert_target_trainings(user: UserDTO, session: AsyncSession) -> None:
+        query = select(
+            Training.id
+        ).join(
+            Interest, Interest.discipline == Training.discipline
+        ).where(
+            and_(
+                Interest.user_id == user.id,
+                or_(Training.target_auditory == user.age_type, Training.target_auditory.is_(None)),
+                or_(Training.target_gender == user.gender, Training.target_gender.is_(None)),
+                or_(Training.target_usertype == user.user_type, Training.target_usertype.is_(None))
+            )
+            
+        )
+
+        result = await session.execute(query)
+        training_ids = [row.id for row in result]
+        if training_ids:
+            stmt = pg_insert(AvailableTraining).values([{"user_id": user.id, "training_id": training_id} for training_id in training_ids]).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
+            await session.execute(stmt)
 
     async def add_new_user(self) -> UserAddDTO | None:
         async with async_session_factory() as session:
@@ -752,25 +774,23 @@ class RegistrationService():
                 password=hashed_password,
                 role=self.new_user_dto.role,
                 age=age,
-                gender=self.new_user_dto.gender
+                gender=self.new_user_dto.gender,
+                user_type=self.new_user_dto.level
             )
 
             user = User.from_dto(user_add_dto)
-            session.add(user)
 
+            session.add(user)
             await session.flush()
 
-            interests = []
+            new_user = UserDTO.model_validate(user, from_attributes=True)
 
-            for i in self.new_user_dto.interests:
-                interest = Interest(
-                    discipline=i,
-                    user_id=user.id
-                )
-                interests.append(interest)
-
+            interests = [
+                Interest(discipline=interest, user_id=user.id) for interest in self.new_user_dto.interests
+            ]
             session.add_all(interests)
 
-            await session.commit()
+            await self.calculate_and_insert_target_trainings(new_user, session)
 
-            return user_add_dto
+            await session.commit()
+            return new_user

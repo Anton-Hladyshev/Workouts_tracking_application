@@ -13,6 +13,7 @@ class UserAddDTO(BaseModel):
     age: int
     gender: Gender
     age_type: Auditory | None = None
+    user_type: UserType = Field(default=UserType.NON_COMPETITOR)
 
     @model_validator(mode="after")
     def validate_age_type(self) -> dict:
@@ -28,6 +29,9 @@ class UserAddDTO(BaseModel):
 
 class UserDTO(UserAddDTO):
     id: int
+
+class UserRelInteresstsDTO(UserDTO):
+    interests: List[Discipline]
 
 class UserRegisterDTO(BaseModel):
     name: str = Field(default="Your name")
