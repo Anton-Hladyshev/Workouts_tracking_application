@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from app.config import settings
+from controller.config import settings
 from db.database import ORMBase
 from models.models import Base
 import logging

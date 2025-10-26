@@ -1,6 +1,8 @@
 import sys
 import pathlib
 
+from repositories.training_repository import TrainingRepository
+
 root_path = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_path))
 
@@ -11,7 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import selectinload
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from app.config import settings
+from controller.config import settings
 from models.models import Interest, User, Training, TrainingType, Subscription, AvailableTraining
 from datetime import date, datetime, time
 from schemas.schemas import *
@@ -24,9 +26,11 @@ async_engine = create_async_engine(
     max_overflow=10
 )
 
+async_session_factory = async_sessionmaker(bind=async_engine)
+
 ph = PasswordHasher()
 
-async_session_factory = async_sessionmaker(bind=async_engine)
+
 
 class ORMBase(): 
     @staticmethod
@@ -486,8 +490,9 @@ class ClientService():
 
 # service for a coach
 class CoachService():
-    def __init__(self, user: UserDTO):
+    def __init__(self, user: UserDTO, training_repository: TrainingRepository):
         self.user = user
+        self.training_repository = training_repository
 
     @staticmethod
     async def calculate_target_users(session: AsyncSession, training: TrainingDTO) -> List[Dict[str, int]]:
