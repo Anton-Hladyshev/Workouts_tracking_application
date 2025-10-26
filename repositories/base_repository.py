@@ -22,6 +22,11 @@ class BaseRepository(ABC):
         pass
 
     @abstractmethod
+    def update(self, item_id: int, **kwargs):
+        """Update an item by its ID in the repository"""
+        pass
+
+    @abstractmethod
     def list_all(self):
         """List all items in the repository"""
         pass
