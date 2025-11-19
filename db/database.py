@@ -490,53 +490,10 @@ class ClientService():
 
 # service for a coach
 class CoachService():
-    def __init__(self, user: UserDTO, training_repository: TrainingRepository):
+    def __init__(self, user: UserDTO, session: AsyncSession, training_repository: TrainingRepository):
         self.user = user
+        self.session = session
         self.training_repository = training_repository
-
-    @staticmethod
-    async def calculate_target_users(session: AsyncSession, training: TrainingDTO) -> List[Dict[str, int]]:
-        data = []
-
-        # Case of individual training
-        if training.type == TrainingType.INDIVIDUAL: 
-            data.append({
-                "user_id": training.individual_for_id,
-                "training_id": training.id
-            })
-                
-        # Case of group training
-        else:
-            filters = []
-            filter_map = {
-                "target_auditory": User.age_type,
-                "target_gender": User.gender,
-                "target_usertype": User.user_type
-            }
-            training_dict = training.model_dump(exclude_none=True)
-            for key, value in training_dict.items():
-                if key in filter_map:
-                    filters.append(filter_map[key] == value)
-            query = select(
-                User.id
-            ).join(
-                Interest, Interest.user_id == User.id
-            ).where(
-                and_(
-                    User.role == Role.STUDENT,
-                    Interest.discipline == training.discipline,
-                    *filters
-                )
-            )
-
-            result_query = await session.execute(query)
-
-            user_ids = [row.id for row in result_query]
-
-            data.extend([{"user_id": uid, "training_id": training.id} for uid in user_ids])
-
-        #return query.compile(dialect=postgresql.dialect()).string
-        return data
 
     async def get_trainings(self, training_data: TrainingSearchDTO) -> List[TrainingDTO]:
         async with async_session_factory() as session:
@@ -585,101 +542,54 @@ class CoachService():
             return [TrainingDTO.model_validate(training, from_attributes=True) for training in result.scalars().all()]
 
     async def create_training(self, training_data: TrainingAddDTO) -> TrainingAddDTO:
-        async with async_session_factory() as session:
+        self.training_repository.add(training_data)
+        await self.session.flush()
 
-            training = Training(
-                title=training_data.title,
-                description=training_data.description,
-                time_start=training_data.time_start,
-                time_end=training_data.time_end,
-                type=training_data.type,
-                discipline=training_data.discipline,
-                coach_id=training_data.coach_id,
-                individual_for_id=training_data.individual_for_id,
-                target_auditory=training_data.target_auditory,
-                target_gender=training_data.target_gender,
-                target_usertype=training_data.target_usertype
-            )
+        target_users_data = await self.training_repository.calculate_target_users(training_data)
+        await self.training_repository.add_target_users(target_users_data)
 
-            session.add(training)
-            await session.flush()
-
-            target_users_data = await CoachService.calculate_target_users(session, TrainingDTO.model_validate(training, from_attributes=True))
-                    
-            if target_users_data:
-                stmt = pg_insert(AvailableTraining).values(target_users_data).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
-                await session.execute(stmt)
-            await session.commit()
-
-            return training_data
+        return training_data
             
     async def update_training(self, training_id: int, **kwargs: Dict[str, Any]) -> TrainingDTO:
-            async with async_session_factory() as session:
-                try:
-                    if not kwargs:
-                        raise ValueError("No fields to update")
+        training = await self.training_repository.get(training_id)
+        if not kwargs:
+            raise ValueError("No fields to update")
+        
+        if not training:
+            raise ValueError("Training not found")
+
+        if training.coach_id != self.user.id:
+            raise InvalidPermissionsError("You can't modify this training because you are not a coach of this training")
                     
-                    training = await session.get(Training, training_id)
-                    if not training:
-                        raise ValueError("Training not found")
+        filter_params = {
+            "type": training.type,
+            "target_auditory": training.target_auditory,
+            "target_gender": training.target_gender,
+            "target_usertype": training.target_usertype,
+            "discipline": training.discipline
+        }
 
-                    if training.coach_id != self.user.id:
-                        raise InvalidPermissionsError("You can't modify this training because you are not a coach of this training")
-                    
-                    filter_params = {
-                        "type": training.type,
-                        "target_auditory": training.target_auditory,
-                        "target_gender": training.target_gender,
-                        "target_usertype": training.target_usertype,
-                        "discipline": training.discipline
-                    }
+        await self.training_repository.update(training, **kwargs)
 
-                    updated_date = kwargs.get("date", training.time_start.date())
-                    updated_time_start = kwargs.get("time_start", training.time_start.time())
-                    updated_time_end = kwargs.get("time_end", training.time_end.time())
+        training_dto = TrainingDTO.model_validate(training, from_attributes=True)
 
-                    new_time_start = datetime.combine(updated_date, updated_time_start)
-                    kwargs["time_start"] = new_time_start
-                    new_time_end = datetime.combine(updated_date, updated_time_end)
-                    kwargs["time_end"] = new_time_end
+        #if one fo target params has changed, we need to recalculate the target users
+        if not (training_dto.type == filter_params["type"] 
+                and training_dto.target_auditory == filter_params["target_auditory"] 
+                and training_dto.target_gender == filter_params["target_gender"] 
+                and training_dto.discipline == filter_params["discipline"] 
+                and training_dto.target_usertype == filter_params["target_usertype"]):
+            data_target_users = []
 
+            # delete old target users for this training
+            await self.training_repository.delete_target_users(training_id)
 
-                    for key, value in kwargs.items():
-                        if hasattr(training, key):
-                            setattr(training, key, value)
+            # add new target users for this training
+            data_target_users = await self.training_repository.calculate_target_users(training_dto)
 
-                    training_dto = TrainingDTO.model_validate(training, from_attributes=True)
+            await self.training_repository.add_target_users(data_target_users)
 
-                    #if one fo target params has changed, we need to recalculate the target users
-                    if not (training_dto.type == filter_params["type"] 
-                            and training_dto.target_auditory == filter_params["target_auditory"] 
-                            and training_dto.target_gender == filter_params["target_gender"] 
-                            and training_dto.discipline == filter_params["discipline"] 
-                            and training_dto.target_usertype == filter_params["target_usertype"]):
-                        data_target_users = []
-
-                        # delete old target users for this training
-                        await session.execute(
-                            delete(
-                                AvailableTraining
-                                ).where(
-                                    AvailableTraining.training_id == training_dto.id
-                                )
-                        )
-
-                        # add new target users for this training
-                        data_target_users = await self.calculate_target_users(session, training_dto)
-
-                        if data_target_users:
-                            stmt = pg_insert(AvailableTraining).values(data_target_users).on_conflict_do_nothing(index_elements=['user_id', 'training_id'])
-                            await session.execute(stmt)
-
-                    await session.commit()
-                    return training_dto
-
-                except Exception as ex:
-                    await session.rollback()
-                    raise ex
+        return training_dto
                 
     async def get_students_of_training(self, training_id: int) -> List[UserDTO]:
         async with async_session_factory() as session:
@@ -703,21 +613,13 @@ class CoachService():
                 raise ex
                 
     async def delete_training(self, training_id: int) -> None:
-        async with async_session_factory() as session:
-            try:
-                training = await ORMBase.get_training_by_id(training_id)
-                if not training:
-                    raise ValueError("Training not found")
-                if training.coach_id != self.user.id:
-                    raise InvalidPermissionsError("You do not have permission to delete this training.")
+        training = await self.training_repository.get(training_id)
+        if not training:
+            raise ValueError("Training not found")
+        if training.coach_id != self.user.id:
+            raise InvalidPermissionsError("You do not have permission to delete this training.")
 
-                await session.execute(
-                    delete(Training).where(Training.id == training_id)
-                )
-                await session.commit()
-            except Exception as ex:
-                await session.rollback()
-                raise ex
+        await self.training_repository.remove(training_id)
             
     def get_user(self) -> UserDTO:
         return self.user

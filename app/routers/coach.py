@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Annotated, List
 from fastapi import APIRouter, Body, Depends, HTTPException, status
+from controller.unit_of_work import UnitOfWork
 from db.database import CoachService
 from models.enums import Auditory, Discipline, Gender, Role, TrainingType
 from schemas.schemas import TrainingAddDTO, TrainingDTO, TrainingOnInputDTO, TrainingOnInputToUpdateDTO, TrainingSearchDTO, UserDTO
@@ -26,8 +27,9 @@ def get_curent_coach(user: UserDTO = Depends(get_current_user)) -> UserDTO:
 async def read_current_coach(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)]
 ) -> UserDTO:
-    service = CoachService(current_user)
-    return service.get_user()
+    with UnitOfWork() as uow:
+        service = CoachService(current_user, uow.session, uow.training_repository)
+        return service.get_user()
 
 @router.get("/users/me/coach/trainings/get", status_code=status.HTTP_200_OK, response_model=List[TrainingDTO])
 async def get_trainings_by_parameters(
@@ -90,25 +92,27 @@ async def create_training(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)],
     training_data: TrainingOnInputDTO = Body()
     ):
-    service = CoachService(current_user)
-    training_dict = training_data.model_dump()
-    date_time_start = datetime.strptime(f"{training_dict["date"]} {training_dict["time_start"]}", "%Y-%m-%d %H:%M:%S")
-    date_time_end = datetime.strptime(f"{training_dict["date"]} {training_dict["time_end"]}", "%Y-%m-%d %H:%M:%S")
+    with UnitOfWork() as uow:
+        service = CoachService(current_user, uow.session, uow.training_repository)
+        training_dict = training_data.model_dump()
+        date_time_start = datetime.strptime(f"{training_dict["date"]} {training_dict["time_start"]}", "%Y-%m-%d %H:%M:%S")
+        date_time_end = datetime.strptime(f"{training_dict["date"]} {training_dict["time_end"]}", "%Y-%m-%d %H:%M:%S")
 
-    training_dto = TrainingAddDTO(
-        title=training_dict.get("title"),
-        description=training_dict.get("description"),
-        time_start=date_time_start,
-        time_end=date_time_end,
-        type=TrainingType(training_dict.get("type")),
-        discipline=Discipline(training_dict.get("discipline")),
-        coach_id=current_user.id,
-        individual_for_id=training_dict.get("individual_for_id"),
-        target_auditory=training_dict.get("target_auditory"),
-        target_gender=training_dict.get("target_gender"),
-        target_usertype=training_dict.get("target_usertype")
-    )
-    new_training = await service.create_training(training_data=training_dto)
+        training_dto = TrainingAddDTO(
+            title=training_dict.get("title"),
+            description=training_dict.get("description"),
+            time_start=date_time_start,
+            time_end=date_time_end,
+            type=TrainingType(training_dict.get("type")),
+            discipline=Discipline(training_dict.get("discipline")),
+            coach_id=current_user.id,
+            individual_for_id=training_dict.get("individual_for_id"),
+            target_auditory=training_dict.get("target_auditory"),
+            target_gender=training_dict.get("target_gender"),
+            target_usertype=training_dict.get("target_usertype")
+        )
+        new_training = await service.create_training(training_data=training_dto)
+        uow.commit()
     return {
         "code": 201,
         "status": "created",
@@ -122,36 +126,48 @@ async def create_training(
 async def delete_training(
     training_id: int,
     current_user: Annotated[UserDTO, Depends(get_curent_coach)]) -> None:
-    try:
-        service = CoachService(current_user)
-        await service.delete_training(
-            training_id=training_id
-        )
-        return {
-            "code": 204,
-            "status": "deleted",
-            "id": training_id
-        }
+    with UnitOfWork() as uow:
+        try:
+            service = CoachService(current_user, uow.session, uow.training_repository)
+            await service.delete_training(
+                training_id=training_id
+            )
+            uow.commit()
+            return {
+                "code": 204,
+                "status": "deleted",
+                "id": training_id
+            }
     
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="There is not any training with this ID.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="There is not any training with this ID.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
     
 @router.patch("/users/me/coach/trainings/update/{training_id}", status_code=status.HTTP_200_OK)
 async def update_training(
     current_user: Annotated[UserDTO, Depends(get_curent_coach)],
     training_id: int,
     update_data: TrainingOnInputToUpdateDTO = Body()
-        ):
-    service = CoachService(current_user)
+):
+    with UnitOfWork() as uow:
+        try:
+            service = CoachService(current_user, uow.session, uow.training_repository)
 
-    updated_training = await service.update_training(
-        training_id=training_id,
-        **update_data.model_dump(exclude_unset=True)
-    )
+            updated_training = await service.update_training(
+                training_id=training_id,
+                **update_data.model_dump(exclude_unset=True)
+            )
+            uow.commit()
+            
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="There is not any training with this ID.",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
 
     return {
         "code": 200,

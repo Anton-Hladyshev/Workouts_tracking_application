@@ -3,7 +3,7 @@ from typing import Dict
 from sqlalchemy import and_, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
-from base_repository import BaseRepository
+from .base_repository import BaseRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.enums import Role, TrainingType
@@ -72,14 +72,7 @@ class TrainingRepository(BaseRepository):
 
         return [UserDTO.model_validate(user, from_attributes=True) for user in result.scalar_one_or_none().users_on_training]
 
-    async def update(self, item_id: int, **kwargs) -> None:
-        if not kwargs:
-            raise ValueError("No fields to update")
-        
-        training = await self.get(item_id)
-        if not training:
-            raise ValueError("Training not found")
-
+    async def update(self, training: Training, **kwargs) -> None:
         updated_date = kwargs.get("date", training.time_start.date())
         updated_time_start = kwargs.get("time_start", training.time_start.time())
         updated_time_end = kwargs.get("time_end", training.time_end.time())
@@ -93,7 +86,6 @@ class TrainingRepository(BaseRepository):
         for key, value in kwargs.items():
             if hasattr(training, key):
                 setattr(training, key, value)
-
 
     async def list_all(self) -> list[TrainingDTO]:
         query_select = select(Training)
